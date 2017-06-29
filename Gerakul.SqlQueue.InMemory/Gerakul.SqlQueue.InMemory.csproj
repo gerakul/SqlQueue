@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard1.4;net46</TargetFrameworks>
+    <Version>1.0.0</Version>
+    <Authors>gerakul</Authors>
+    <Company />
+    <Product />
+    <Description>Client library for working with queue based on memory optimized tables in Sql Server database</Description>
+    <RepositoryUrl>https://github.com/gerakul/SqlQueue</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Data.SqlClient" Version="4.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Gerakul.SqlQueue.Core\Gerakul.SqlQueue.Core.csproj" />
+  </ItemGroup>
+
+</Project>

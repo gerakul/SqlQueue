@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{00D1A9C2-B5F0-4AF3-8072-F6C62B433612}") = "InMemoryOltpTestDb", "InMemoryOltpTestDb\InMemoryOltpTestDb.sqlproj", "{399A8CFE-A98B-4747-B25F-AD6E0D0F2F65}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Gerakul.SqlQueue.InMemory", "Gerakul.SqlQueue.InMemory\Gerakul.SqlQueue.InMemory.csproj", "{2D03182D-084A-4C31-9AB8-A081A00B7812}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Gerakul.SqlQueue.Core", "Gerakul.SqlQueue.Core\Gerakul.SqlQueue.Core.csproj", "{0F26853D-6671-4A57-8123-CEE8283E0925}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Samples", "Samples\Samples.csproj", "{602E54EF-EEFF-49EC-AA39-2F142B043961}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{399A8CFE-A98B-4747-B25F-AD6E0D0F2F65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{399A8CFE-A98B-4747-B25F-AD6E0D0F2F65}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{399A8CFE-A98B-4747-B25F-AD6E0D0F2F65}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{399A8CFE-A98B-4747-B25F-AD6E0D0F2F65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D03182D-084A-4C31-9AB8-A081A00B7812}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D03182D-084A-4C31-9AB8-A081A00B7812}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D03182D-084A-4C31-9AB8-A081A00B7812}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D03182D-084A-4C31-9AB8-A081A00B7812}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0F26853D-6671-4A57-8123-CEE8283E0925}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F26853D-6671-4A57-8123-CEE8283E0925}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F26853D-6671-4A57-8123-CEE8283E0925}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F26853D-6671-4A57-8123-CEE8283E0925}.Release|Any CPU.Build.0 = Release|Any CPU
+		{602E54EF-EEFF-49EC-AA39-2F142B043961}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{602E54EF-EEFF-49EC-AA39-2F142B043961}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{602E54EF-EEFF-49EC-AA39-2F142B043961}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{602E54EF-EEFF-49EC-AA39-2F142B043961}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

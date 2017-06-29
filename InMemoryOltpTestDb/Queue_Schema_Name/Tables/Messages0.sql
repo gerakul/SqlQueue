@@ -1,0 +1,8 @@
+﻿CREATE TABLE [Queue_Schema_Name].[Messages0] (
+    [ID]      BIGINT           NOT NULL,
+    [Created] DATETIME2 (7)    NOT NULL,
+    [Body]    VARBINARY (8000) NOT NULL,
+    PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
+)
+WITH (DURABILITY = SCHEMA_ONLY, MEMORY_OPTIMIZED = ON);
+

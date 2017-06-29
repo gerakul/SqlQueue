@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <Name>InMemoryOltpTestDb</Name>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectVersion>4.1</ProjectVersion>
+    <ProjectGuid>{399a8cfe-a98b-4747-b25f-ad6e0d0f2f65}</ProjectGuid>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.SqlAzureV12DatabaseSchemaProvider</DSP>
+    <OutputType>Database</OutputType>
+    <RootPath>
+    </RootPath>
+    <RootNamespace>InMemoryOltpTestDb</RootNamespace>
+    <AssemblyName>InMemoryOltpTestDb</AssemblyName>
+    <ModelCollation>1033, CI</ModelCollation>
+    <DefaultFileStructure>BySchemaAndSchemaType</DefaultFileStructure>
+    <DeployToDatabase>True</DeployToDatabase>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetLanguage>CS</TargetLanguage>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <SqlServerVerification>False</SqlServerVerification>
+    <IncludeCompositeObjects>True</IncludeCompositeObjects>
+    <TargetDatabaseSet>True</TargetDatabaseSet>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>bin\Release\</OutputPath>
+    <BuildScriptName>$(MSBuildProjectName).sql</BuildScriptName>
+    <TreatWarningsAsErrors>False</TreatWarningsAsErrors>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <OutputPath>bin\Debug\</OutputPath>
+    <BuildScriptName>$(MSBuildProjectName).sql</BuildScriptName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">11.0</VisualStudioVersion>
+    <!-- Default to the v11.0 targets path if the targets file for the current VS version is not found -->
+    <SSDTExists Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets')">True</SSDTExists>
+    <VisualStudioVersion Condition="'$(SSDTExists)' == ''">11.0</VisualStudioVersion>
+  </PropertyGroup>
+  <Import Condition="'$(SQLDBExtensionsRefPath)' != ''" Project="$(SQLDBExtensionsRefPath)\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
+  <Import Condition="'$(SQLDBExtensionsRefPath)' == ''" Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
+  <ItemGroup>
+    <Folder Include="Properties" />
+    <Folder Include="Queue_Schema_Name\" />
+    <Folder Include="Queue_Schema_Name\Tables\" />
+    <Folder Include="Queue_Schema_Name\Stored Procedures\" />
+    <Folder Include="Security\" />
+  </ItemGroup>
+  <ItemGroup>
+    <PostDeploy Include="Script.PostDeployment1.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <Build Include="Queue_Schema_Name\Tables\Subscription.sql" />
+    <Build Include="Queue_Schema_Name\Tables\State.sql" />
+    <Build Include="Queue_Schema_Name\Tables\Settings.sql" />
+    <Build Include="Queue_Schema_Name\Tables\Messages2.sql" />
+    <Build Include="Queue_Schema_Name\Tables\Messages1.sql" />
+    <Build Include="Queue_Schema_Name\Tables\Messages0.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\Write.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\Unlock.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\Relock.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\Read.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\GetSubscription.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\FindSubscription.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\EnableSubscription.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\DisableSubscription.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\DeleteSubscription.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\CreateSubscription.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\Complete.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\Clean.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\RestoreState.sql" />
+    <Build Include="Security\Queue_Schema_Name.sql" />
+  </ItemGroup>
+</Project>
