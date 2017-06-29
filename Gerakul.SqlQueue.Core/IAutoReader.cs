@@ -7,7 +7,7 @@ namespace Gerakul.SqlQueue.Core
 {
     public interface IAutoReader
     {
-        Task Start(Func<Message[], Task> handler, int minDelayMilliseconds, int maxDelayMilliseconds);
+        Task Start(Func<Message[], Task> handler, int minDelayMilliseconds, int maxDelayMilliseconds, int numPerReed);
         Task Stop();
     }
 }

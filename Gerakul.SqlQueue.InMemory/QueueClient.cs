@@ -154,10 +154,10 @@ namespace Gerakul.SqlQueue.InMemory
             return new Reader(this, subscription, defaultCheckLockSeconds);
         }
 
-        public AutoReader CreateAutoReader(string subscription, int maxPortion = -1)
+        public AutoReader CreateAutoReader(string subscription)
         {
             FindSubscriptionOrThrowException(subscription);
-            return new AutoReader(this, subscription, maxPortion);
+            return new AutoReader(this, subscription);
         }
     }
 }

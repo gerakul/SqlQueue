@@ -11,7 +11,6 @@ namespace Gerakul.SqlQueue.InMemory
     public class AutoReader : IAutoReader
     {
         private Reader reader;
-        private int maxPortion;
         private CancellationTokenSource receivingLoopCTS;
         private CancellationTokenSource relockingLoopCTS;
         private bool started = false;
@@ -20,13 +19,12 @@ namespace Gerakul.SqlQueue.InMemory
         private Task EndTask;
         private DateTime lastRelock = DateTime.MinValue;
 
-        internal AutoReader(QueueClient queueClient, string subscription, int maxPortion)
+        internal AutoReader(QueueClient queueClient, string subscription)
         {
-            this.maxPortion = maxPortion;
             reader = new Reader(queueClient, subscription, 30);
         }
 
-        public Task Start(Func<Message[], Task> handler, int minDelayMilliseconds, int maxDelayMilliseconds)
+        public Task Start(Func<Message[], Task> handler, int minDelayMilliseconds, int maxDelayMilliseconds, int numPerReed = -1)
         {
             lock (lockObject)
             {
@@ -43,7 +41,7 @@ namespace Gerakul.SqlQueue.InMemory
             receivingLoopCTS = new CancellationTokenSource();
 
             Task.Factory.StartNew(() => RelockingLoop(relockingLoopCTS.Token), TaskCreationOptions.LongRunning).ConfigureAwait(false);
-            Task.Factory.StartNew(() => ReceivingLoop(handler, minDelayMilliseconds, maxDelayMilliseconds, receivingLoopCTS.Token), TaskCreationOptions.LongRunning).ConfigureAwait(false);
+            Task.Factory.StartNew(() => ReceivingLoop(handler, minDelayMilliseconds, maxDelayMilliseconds, numPerReed, receivingLoopCTS.Token), TaskCreationOptions.LongRunning).ConfigureAwait(false);
             return Task.CompletedTask;
         }
 
@@ -71,22 +69,14 @@ namespace Gerakul.SqlQueue.InMemory
             }
         }
 
-        private async Task ReceivingLoop(Func<Message[], Task> handler, int minDelayMilliseconds, int maxDelayMilliseconds,
+        private async Task ReceivingLoop(Func<Message[], Task> handler, int minDelayMilliseconds, int maxDelayMilliseconds, int numPerReed,
             CancellationToken cancellationToken)
         {
             int delay = minDelayMilliseconds;
             Stopwatch sw = new Stopwatch();
-            Message[] messages;
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (maxPortion > 0)
-                {
-                    messages = reader.Read(maxPortion);
-                }
-                else
-                {
-                    messages = reader.ReadAll();
-                }
+                var messages = reader.Read(numPerReed);
 
                 if (messages?.Length > 0)
                 {
