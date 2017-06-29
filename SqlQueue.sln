@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Gerakul.SqlQueue.InMemory",
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Gerakul.SqlQueue.Core", "Gerakul.SqlQueue.Core\Gerakul.SqlQueue.Core.csproj", "{0F26853D-6671-4A57-8123-CEE8283E0925}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Samples", "Samples\Samples.csproj", "{602E54EF-EEFF-49EC-AA39-2F142B043961}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Samples", "Samples\Samples.csproj", "{602E54EF-EEFF-49EC-AA39-2F142B043961}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

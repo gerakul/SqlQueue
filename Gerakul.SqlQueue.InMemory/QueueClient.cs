@@ -150,7 +150,14 @@ namespace Gerakul.SqlQueue.InMemory
 
         public Reader CreateReader(string subscription, int defaultCheckLockSeconds = 30)
         {
+            FindSubscriptionOrThrowException(subscription);
             return new Reader(this, subscription, defaultCheckLockSeconds);
+        }
+
+        public AutoReader CreateAutoReader(string subscription, int maxPortion = -1)
+        {
+            FindSubscriptionOrThrowException(subscription);
+            return new AutoReader(this, subscription, maxPortion);
         }
     }
 }
