@@ -1,15 +1,20 @@
-﻿using Gerakul.SqlQueue.InMemory;
+﻿using Gerakul.SqlQueue.Core;
+using Gerakul.SqlQueue.InMemory;
 using System;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Samples
 {
     class Program
     {
+        private static string connectionString = "{your connection string}";
+
         static void Main(string[] args)
         {
             // Note! Database must be configured for memory optimized tables before queue creation
-
-            string connectionString = "{your connection string}";
 
             // creating queue
             var factory = new QueueFactory(connectionString);
@@ -37,11 +42,46 @@ namespace Samples
             // making massages completed after handling
             reader.Complete();
 
+            // another way to handle messages - using AutoReader
+            AutoReading().Wait();
+
             // deleting subscription
             client.DeleteSubscription("MySubscription");
 
             // deleting queue
             factory.DeleteQueue("MyQueue");
+
+            Console.ReadKey();
+        }
+
+        private static async Task AutoReading()
+        {
+            // another way to handle messages - using AutoReader
+
+            var client = QueueClient.Create(connectionString, "MyQueue");
+            var writer = client.CreateWriter();
+
+            byte[] message1 = { 0x01, 0x02, 0x03 };
+            writer.Write(message1);
+
+            byte[] message2 = { 0x04, 0x05, 0x06 };
+            writer.Write(message2);
+
+
+            // reading
+            var autoReader = client.CreateAutoReader("MySubscription");
+            await autoReader.Start(Handler);
+
+            await Task.Delay(1000);
+
+            await autoReader.Stop();
+        }
+
+        private static Task Handler(Message[] messages)
+        {
+            // handling messages
+            Console.WriteLine($"Number:{messages.Length}");
+            return Task.CompletedTask;
         }
     }
 }
