@@ -40,3 +40,16 @@ Note! Database must be configured for memory optimized tables before queue creat
         // deleting queue
         factory.DeleteQueue("MyQueue");
   ```  
+  
+  Another way to handle messages - using AutoReader
+  
+  ```csharp
+        // creating AutoReader         
+        var autoReader = client.CreateAutoReader("MySubscription");
+        
+        // start reading and handling
+        await autoReader.Start(Handler /*delegate for processing of messages*/);
+        
+        // stop reading
+        await autoReader.Stop();
+  ```     
