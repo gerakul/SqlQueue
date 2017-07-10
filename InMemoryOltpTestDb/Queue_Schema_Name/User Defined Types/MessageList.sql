@@ -1,0 +1,6 @@
+﻿CREATE TYPE [Queue_Schema_Name].[MessageList] AS TABLE (
+    [ID]   INT              NOT NULL,
+    [Body] VARBINARY (8000) NOT NULL,
+    PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1024))
+    WITH (MEMORY_OPTIMIZED = ON);
+

@@ -18,6 +18,7 @@ namespace Samples
 
             // creating queue
             var factory = new QueueFactory(connectionString);
+            factory.DeleteQueue("MyQueue");
             factory.CreateQueue("MyQueue");
 
             // connecting to queue
@@ -32,6 +33,15 @@ namespace Samples
             // writing message to queue
             byte[] message = { 0x01, 0x02, 0x03 };
             var id = writer.Write(message);
+
+            // writing batch of messages to queue
+            byte[][] batch = {
+                new byte[] { 0x01, 0x02, 0x03 },
+                new byte[] { 0x01, 0x02, 0x04 },
+                new byte[] { 0x01, 0x02, 0x05 },
+            };
+
+            var ids = writer.WriteMany(batch, true);
 
             // creating reader for subscription
             var reader = client.CreateReader("MySubscription");
@@ -61,12 +71,13 @@ namespace Samples
             var client = QueueClient.Create(connectionString, "MyQueue");
             var writer = client.CreateWriter();
 
-            byte[] message1 = { 0x01, 0x02, 0x03 };
-            writer.Write(message1);
+            byte[][] batch = {
+                new byte[] { 0x01, 0x02, 0x03 },
+                new byte[] { 0x04, 0x05, 0x06 },
+                new byte[] { 0x07, 0x08, 0x09 },
+            };
 
-            byte[] message2 = { 0x04, 0x05, 0x06 };
-            writer.Write(message2);
-
+            writer.WriteMany(batch);
 
             // reading
             var autoReader = client.CreateAutoReader("MySubscription");

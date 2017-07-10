@@ -61,6 +61,7 @@
     <Folder Include="Queue_Schema_Name\Tables\" />
     <Folder Include="Queue_Schema_Name\Stored Procedures\" />
     <Folder Include="Security\" />
+    <Folder Include="Queue_Schema_Name\User Defined Types\" />
   </ItemGroup>
   <ItemGroup>
     <PostDeploy Include="Script.PostDeployment1.sql" />
@@ -86,5 +87,7 @@
     <Build Include="Queue_Schema_Name\Stored Procedures\Clean.sql" />
     <Build Include="Queue_Schema_Name\Stored Procedures\RestoreState.sql" />
     <Build Include="Security\Queue_Schema_Name.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\WriteMany.sql" />
+    <Build Include="Queue_Schema_Name\User Defined Types\MessageList.sql" />
   </ItemGroup>
 </Project>

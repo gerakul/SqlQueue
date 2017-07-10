@@ -1,15 +1,17 @@
 ﻿using Gerakul.SqlQueue.Core;
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class Writer : IWriter
+    public class Writer : IWriter, IWriterMany
     {
         private QueueClient queueClient;
         private SqlConnection connection;
         private SqlCommand writeCommand;
+        private SqlCommand writeManyCommand;
         private bool needReconnect = true;
         private int cleanMinIntervalSeconds;
         private DateTime lastCleanup;
@@ -37,6 +39,13 @@ namespace Gerakul.SqlQueue.InMemory
             writeCommand.Parameters.Add("body", System.Data.SqlDbType.Binary);
             writeCommand.Parameters.Add(new SqlParameter("id", System.Data.SqlDbType.BigInt) { Direction = System.Data.ParameterDirection.Output });
             writeCommand.Prepare();
+
+            writeManyCommand = connection.CreateCommand();
+            writeManyCommand.CommandType = System.Data.CommandType.StoredProcedure;
+            writeManyCommand.CommandText = $"[{queueClient.QueueName}].[WriteMany]";
+            writeManyCommand.Parameters.Add("messageList", System.Data.SqlDbType.Structured);
+            writeManyCommand.Parameters.Add("returnIDs", System.Data.SqlDbType.Bit);
+            writeManyCommand.Prepare();
 
             needReconnect = false;
         }
@@ -85,6 +94,53 @@ namespace Gerakul.SqlQueue.InMemory
             }
 
             return id;
+        }
+
+        public long[] WriteMany(IEnumerable<byte[]> data, bool returnIDs = false)
+        {
+            List<long> ids = null;
+            lock (lockObj)
+            {
+                if (needReconnect)
+                {
+                    Reconnect();
+                }
+
+                try
+                {
+                    writeManyCommand.Parameters[0].Value = new MessDbDataReader(data);
+                    writeManyCommand.Parameters[1].Value = returnIDs;
+
+                    if (returnIDs)
+                    {
+                        ids = new List<long>();
+                        using (var r = writeManyCommand.ExecuteReader())
+                        {
+                            while (r.Read())
+                            {
+                                ids.Add(r.GetInt64(0));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        writeManyCommand.ExecuteNonQuery();
+                    }
+                }
+                catch
+                {
+                    needReconnect = true;
+                    throw;
+                }
+            }
+
+            if ((DateTime.UtcNow - lastCleanup).TotalSeconds > cleanMinIntervalSeconds)
+            {
+                Clean();
+                lastCleanup = DateTime.UtcNow;
+            }
+
+            return ids?.ToArray();
         }
     }
 }
