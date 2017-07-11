@@ -24,6 +24,15 @@ Note! Database must be configured for memory optimized tables before queue creat
         // writing message to queue
         byte[] message = { 0x01, 0x02, 0x03 };
         var id = writer.Write(message);
+        
+        // writing batch of messages to queue
+        byte[][] batch = {
+            new byte[] { 0x01, 0x02, 0x03 },
+            new byte[] { 0x01, 0x02, 0x04 },
+            new byte[] { 0x01, 0x02, 0x05 },
+        };
+
+        var ids = writer.WriteMany(batch, true);
 
         // creating reader for subscription
         var reader = client.CreateReader("MySubscription");
