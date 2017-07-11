@@ -1,7 +1,9 @@
 ﻿using Gerakul.SqlQueue.Core;
+using Microsoft.SqlServer.Server;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Gerakul.SqlQueue.InMemory
@@ -16,6 +18,10 @@ namespace Gerakul.SqlQueue.InMemory
         private int cleanMinIntervalSeconds;
         private DateTime lastCleanup;
         private object lockObj = new object();
+        private SqlMetaData[] schema = new SqlMetaData[] {
+                        new SqlMetaData("ID", System.Data.SqlDbType.Int),
+                        new SqlMetaData("Body", System.Data.SqlDbType.VarBinary, 8000),
+                    };
 
         internal Writer(QueueClient queueClient, int cleanMinIntervalSeconds)
         {
@@ -108,7 +114,8 @@ namespace Gerakul.SqlQueue.InMemory
 
                 try
                 {
-                    writeManyCommand.Parameters[0].Value = new MessDbDataReader(data);
+                    //writeManyCommand.Parameters[0].Value = new MessDbDataReader(data); // not working in net46
+                    writeManyCommand.Parameters[0].Value = GetRecords(data);
                     writeManyCommand.Parameters[1].Value = returnIDs;
 
                     if (returnIDs)
@@ -141,6 +148,18 @@ namespace Gerakul.SqlQueue.InMemory
             }
 
             return ids?.ToArray();
+        }
+
+        private IEnumerable<SqlDataRecord> GetRecords(IEnumerable<byte[]> data)
+        {
+            int n = 1;
+            foreach (var item in data)
+            {
+                var rec = new SqlDataRecord(schema);
+                rec.SetInt32(0, n++);
+                rec.SetSqlBytes(1, new System.Data.SqlTypes.SqlBytes(item));
+                yield return rec;
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Text;
 
@@ -11,7 +12,6 @@ namespace Gerakul.SqlQueue.InMemory
         IEnumerator<byte[]> enumerator;
         int id = 0;
         byte[] body;
-        bool closed = false;
 
         public MessDbDataReader(IEnumerable<byte[]> data)
         {
@@ -28,7 +28,7 @@ namespace Gerakul.SqlQueue.InMemory
 
         public override bool HasRows => throw new NotImplementedException();
 
-        public override bool IsClosed => closed;
+        public override bool IsClosed => false;
 
         public override int RecordsAffected => throw new NotImplementedException();
 
