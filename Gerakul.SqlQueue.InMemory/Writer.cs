@@ -36,7 +36,13 @@ namespace Gerakul.SqlQueue.InMemory
                 connection.Close();
             }
 
-            connection = new SqlConnection(queueClient.ConnectionString);
+            SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(queueClient.ConnectionString);
+            if (csb.Pooling)
+            {
+                csb.Pooling = false;
+            }
+
+            connection = new SqlConnection(csb.ConnectionString);
             connection.Open();
 
             writeCommand = connection.CreateCommand();
