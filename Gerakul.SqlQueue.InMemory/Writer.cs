@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Gerakul.SqlQueue.InMemory
@@ -18,6 +19,8 @@ namespace Gerakul.SqlQueue.InMemory
         private int cleanMinIntervalSeconds;
         private DateTime lastCleanup;
         private object lockObj = new object();
+        private int cleaning = 0;
+
         private SqlMetaData[] schema = new SqlMetaData[] {
                         new SqlMetaData("ID", System.Data.SqlDbType.Int),
                         new SqlMetaData("Body", System.Data.SqlDbType.VarBinary, 8000),
@@ -64,14 +67,28 @@ namespace Gerakul.SqlQueue.InMemory
 
         private void Clean()
         {
-            using (SqlConnection conn = new SqlConnection(queueClient.ConnectionString))
+            if (Interlocked.CompareExchange(ref cleaning, 1, 0) == 1)
             {
-                conn.Open();
+                return;
+            }
 
-                var cmd = conn.CreateCommand();
-                cmd.CommandType = System.Data.CommandType.StoredProcedure;
-                cmd.CommandText = $"[{queueClient.QueueName}].[Clean]";
-                cmd.ExecuteNonQuery();
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(queueClient.ConnectionString))
+                {
+                    conn.Open();
+
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                    cmd.CommandText = $"[{queueClient.QueueName}].[Clean]";
+                    cmd.ExecuteNonQuery();
+                }
+
+                lastCleanup = DateTime.UtcNow;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref cleaning, 0);
             }
         }
 
@@ -102,7 +119,6 @@ namespace Gerakul.SqlQueue.InMemory
             if ((DateTime.UtcNow - lastCleanup).TotalSeconds > cleanMinIntervalSeconds)
             {
                 Clean();
-                lastCleanup = DateTime.UtcNow;
             }
 
             return id;
@@ -150,7 +166,6 @@ namespace Gerakul.SqlQueue.InMemory
             if ((DateTime.UtcNow - lastCleanup).TotalSeconds > cleanMinIntervalSeconds)
             {
                 Clean();
-                lastCleanup = DateTime.UtcNow;
             }
 
             return ids?.ToArray();
