@@ -68,7 +68,7 @@ namespace Gerakul.SqlQueue.InMemory
             {
                 conn.Open();
 
-                var cmd = connection.CreateCommand();
+                var cmd = conn.CreateCommand();
                 cmd.CommandType = System.Data.CommandType.StoredProcedure;
                 cmd.CommandText = $"[{queueClient.QueueName}].[Clean]";
                 cmd.ExecuteNonQuery();
