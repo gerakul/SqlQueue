@@ -186,7 +186,7 @@ namespace Gerakul.SqlQueue.InMemory
                     {
                         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
                     }
-                    catch (TaskCanceledException ex)
+                    catch (TaskCanceledException)
                     {
                     }
                 }

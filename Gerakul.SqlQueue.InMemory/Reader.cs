@@ -149,7 +149,7 @@ namespace Gerakul.SqlQueue.InMemory
                         lockGuid = (Guid)readCommand.Parameters[4].Value;
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
                     needReconnect = true;
                     throw;
@@ -246,7 +246,7 @@ namespace Gerakul.SqlQueue.InMemory
                     relockCommand.Parameters[1].Value = currentLockToken;
                     relockCommand.ExecuteNonQuery();
                 }
-                catch (Exception ex)
+                catch
                 {
                     needReconnect = true;
                     throw;
@@ -274,7 +274,7 @@ namespace Gerakul.SqlQueue.InMemory
                     completeCommand.Parameters[2].Value = currentLockToken;
                     completeCommand.ExecuteNonQuery();
                 }
-                catch (Exception ex)
+                catch
                 {
                     needReconnect = true;
                     throw;
@@ -304,7 +304,7 @@ namespace Gerakul.SqlQueue.InMemory
                     unlockCommand.Parameters[1].Value = currentLockToken;
                     unlockCommand.ExecuteNonQuery();
                 }
-                catch (Exception ex)
+                catch
                 {
                     needReconnect = true;
                     throw;

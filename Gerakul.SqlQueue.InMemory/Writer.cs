@@ -18,8 +18,12 @@ namespace Gerakul.SqlQueue.InMemory
         private bool needReconnect = true;
         private int cleanMinIntervalSeconds;
         private DateTime lastCleanup;
+        private DateTime lastWrite;
         private object lockObj = new object();
         private int cleaning = 0;
+        private Timer cleanTimer;
+
+        public event EventHandler<CleanExceptionEventArgs> CleanException;
 
         private SqlMetaData[] schema = new SqlMetaData[] {
                         new SqlMetaData("ID", System.Data.SqlDbType.Int),
@@ -30,6 +34,13 @@ namespace Gerakul.SqlQueue.InMemory
         {
             this.queueClient = queueClient;
             this.cleanMinIntervalSeconds = cleanMinIntervalSeconds;
+            this.cleanTimer = new Timer(new TimerCallback(x => CleanIfNeed()), null, cleanMinIntervalSeconds * 60, cleanMinIntervalSeconds * 60);
+        }
+
+        private void OnCleanException(CleanExceptionEventArgs e)
+        {
+            var handler = CleanException;
+            handler?.Invoke(this, e);
         }
 
         private void Reconnect()
@@ -65,8 +76,14 @@ namespace Gerakul.SqlQueue.InMemory
             needReconnect = false;
         }
 
-        private void Clean()
+        private void CleanIfNeed()
         {
+            if ((DateTime.UtcNow - lastCleanup).TotalSeconds <= cleanMinIntervalSeconds
+                || (DateTime.UtcNow - lastWrite).TotalSeconds > cleanMinIntervalSeconds * 10)
+            {
+                return;
+            }
+
             if (Interlocked.CompareExchange(ref cleaning, 1, 0) == 1)
             {
                 return;
@@ -85,6 +102,10 @@ namespace Gerakul.SqlQueue.InMemory
                 }
 
                 lastCleanup = DateTime.UtcNow;
+            }
+            catch (Exception ex)
+            {
+                OnCleanException(new CleanExceptionEventArgs(ex));
             }
             finally
             {
@@ -114,11 +135,8 @@ namespace Gerakul.SqlQueue.InMemory
                     needReconnect = true;
                     throw;
                 }
-            }
 
-            if ((DateTime.UtcNow - lastCleanup).TotalSeconds > cleanMinIntervalSeconds)
-            {
-                Clean();
+                lastWrite = DateTime.UtcNow;
             }
 
             return id;
@@ -161,11 +179,8 @@ namespace Gerakul.SqlQueue.InMemory
                     needReconnect = true;
                     throw;
                 }
-            }
 
-            if ((DateTime.UtcNow - lastCleanup).TotalSeconds > cleanMinIntervalSeconds)
-            {
-                Clean();
+                lastWrite = DateTime.UtcNow;
             }
 
             return ids?.ToArray();
@@ -181,6 +196,16 @@ namespace Gerakul.SqlQueue.InMemory
                 rec.SetSqlBytes(1, new System.Data.SqlTypes.SqlBytes(item));
                 yield return rec;
             }
+        }
+    }
+
+    public class CleanExceptionEventArgs : EventArgs
+    {
+        public Exception Exception { get; private set; }
+
+        public CleanExceptionEventArgs(Exception exception)
+        {
+            this.Exception = exception;
         }
     }
 }
