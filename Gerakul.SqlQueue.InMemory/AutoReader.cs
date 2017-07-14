@@ -10,6 +10,9 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public class AutoReader : IAutoReader
     {
+        public QueueClient QueueClient { get; }
+        public string Subscription { get; }
+
         private Reader reader;
         private AutoReaderOptions options;
         private CancellationTokenSource receivingLoopCTS;
@@ -31,6 +34,8 @@ namespace Gerakul.SqlQueue.InMemory
         internal AutoReader(QueueClient queueClient, string subscription, AutoReaderOptions options)
         {
             this.options = options ?? new AutoReaderOptions();
+            this.QueueClient = queueClient;
+            this.Subscription = subscription;
             reader = new Reader(queueClient, subscription, 30);
         }
 

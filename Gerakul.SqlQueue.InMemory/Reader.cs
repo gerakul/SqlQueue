@@ -8,8 +8,9 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public class Reader : IReader
     {
-        private QueueClient queueClient;
-        private string subscription;
+        public QueueClient QueueClient { get; }
+        public string Subscription { get; }
+
         private SqlConnection connection;
         private SqlCommand readCommand;
         private SqlCommand completeCommand;
@@ -24,8 +25,8 @@ namespace Gerakul.SqlQueue.InMemory
 
         internal Reader(QueueClient queueClient, string subscription, int defaultCheckLockSeconds)
         {
-            this.queueClient = queueClient;
-            this.subscription = subscription;
+            this.QueueClient = queueClient;
+            this.Subscription = subscription;
             this.defaultCheckLockSeconds = defaultCheckLockSeconds;
         }
 
@@ -33,7 +34,7 @@ namespace Gerakul.SqlQueue.InMemory
         {
             if (subscriptionID == 0)
             {
-                subscriptionID = queueClient.FindSubscriptionOrThrowException(subscription);
+                subscriptionID = QueueClient.FindSubscriptionOrThrowException(Subscription);
             }
 
             if (connection != null && (connection.State & System.Data.ConnectionState.Open) == System.Data.ConnectionState.Open)
@@ -41,7 +42,7 @@ namespace Gerakul.SqlQueue.InMemory
                 connection.Close();
             }
 
-            SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(queueClient.ConnectionString);
+            SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(QueueClient.ConnectionString);
             if (csb.Pooling)
             {
                 csb.Pooling = false;
@@ -52,7 +53,7 @@ namespace Gerakul.SqlQueue.InMemory
 
             readCommand = connection.CreateCommand();
             readCommand.CommandType = System.Data.CommandType.StoredProcedure;
-            readCommand.CommandText = $"[{queueClient.QueueName}].[Read]";
+            readCommand.CommandText = $"[{QueueClient.QueueName}].[Read]";
             readCommand.Parameters.AddWithValue("subscriptionID", subscriptionID);
             readCommand.Parameters.Add("num", System.Data.SqlDbType.Int);
             readCommand.Parameters.Add("checkLockSeconds", System.Data.SqlDbType.Int);
@@ -63,7 +64,7 @@ namespace Gerakul.SqlQueue.InMemory
 
             completeCommand = connection.CreateCommand();
             completeCommand.CommandType = System.Data.CommandType.StoredProcedure;
-            completeCommand.CommandText = $"[{queueClient.QueueName}].[Complete]";
+            completeCommand.CommandText = $"[{QueueClient.QueueName}].[Complete]";
             completeCommand.Parameters.AddWithValue("subscriptionID", subscriptionID);
             completeCommand.Parameters.Add("id", System.Data.SqlDbType.BigInt);
             completeCommand.Parameters.Add("currentLockToken", System.Data.SqlDbType.UniqueIdentifier);
@@ -71,14 +72,14 @@ namespace Gerakul.SqlQueue.InMemory
 
             relockCommand = connection.CreateCommand();
             relockCommand.CommandType = System.Data.CommandType.StoredProcedure;
-            relockCommand.CommandText = $"[{queueClient.QueueName}].[Relock]";
+            relockCommand.CommandText = $"[{QueueClient.QueueName}].[Relock]";
             relockCommand.Parameters.AddWithValue("subscriptionID", subscriptionID);
             relockCommand.Parameters.Add("currentLockToken", System.Data.SqlDbType.UniqueIdentifier);
             relockCommand.Prepare();
 
             unlockCommand = connection.CreateCommand();
             unlockCommand.CommandType = System.Data.CommandType.StoredProcedure;
-            unlockCommand.CommandText = $"[{queueClient.QueueName}].[Unlock]";
+            unlockCommand.CommandText = $"[{QueueClient.QueueName}].[Unlock]";
             unlockCommand.Parameters.AddWithValue("subscriptionID", subscriptionID);
             unlockCommand.Parameters.Add("currentLockToken", System.Data.SqlDbType.UniqueIdentifier);
             unlockCommand.Prepare();

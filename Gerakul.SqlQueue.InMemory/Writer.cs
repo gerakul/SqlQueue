@@ -11,7 +11,8 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public class Writer : IWriter, IWriterMany
     {
-        private QueueClient queueClient;
+        public QueueClient QueueClient { get; }
+
         private SqlConnection connection;
         private SqlCommand writeCommand;
         private SqlCommand writeManyCommand;
@@ -32,7 +33,7 @@ namespace Gerakul.SqlQueue.InMemory
 
         internal Writer(QueueClient queueClient, int cleanMinIntervalSeconds)
         {
-            this.queueClient = queueClient;
+            this.QueueClient = queueClient;
             this.cleanMinIntervalSeconds = cleanMinIntervalSeconds;
             this.cleanTimer = new Timer(new TimerCallback(x => CleanIfNeed()), null, cleanMinIntervalSeconds * 60, cleanMinIntervalSeconds * 60);
         }
@@ -50,7 +51,7 @@ namespace Gerakul.SqlQueue.InMemory
                 connection.Close();
             }
 
-            SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(queueClient.ConnectionString);
+            SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(QueueClient.ConnectionString);
             if (csb.Pooling)
             {
                 csb.Pooling = false;
@@ -61,14 +62,14 @@ namespace Gerakul.SqlQueue.InMemory
 
             writeCommand = connection.CreateCommand();
             writeCommand.CommandType = System.Data.CommandType.StoredProcedure;
-            writeCommand.CommandText = $"[{queueClient.QueueName}].[Write]";
+            writeCommand.CommandText = $"[{QueueClient.QueueName}].[Write]";
             writeCommand.Parameters.Add("body", System.Data.SqlDbType.Binary);
             writeCommand.Parameters.Add(new SqlParameter("id", System.Data.SqlDbType.BigInt) { Direction = System.Data.ParameterDirection.Output });
             writeCommand.Prepare();
 
             writeManyCommand = connection.CreateCommand();
             writeManyCommand.CommandType = System.Data.CommandType.StoredProcedure;
-            writeManyCommand.CommandText = $"[{queueClient.QueueName}].[WriteMany]";
+            writeManyCommand.CommandText = $"[{QueueClient.QueueName}].[WriteMany]";
             writeManyCommand.Parameters.Add("messageList", System.Data.SqlDbType.Structured);
             writeManyCommand.Parameters.Add("returnIDs", System.Data.SqlDbType.Bit);
             writeManyCommand.Prepare();
@@ -91,13 +92,13 @@ namespace Gerakul.SqlQueue.InMemory
 
             try
             {
-                using (SqlConnection conn = new SqlConnection(queueClient.ConnectionString))
+                using (SqlConnection conn = new SqlConnection(QueueClient.ConnectionString))
                 {
                     conn.Open();
 
                     var cmd = conn.CreateCommand();
                     cmd.CommandType = System.Data.CommandType.StoredProcedure;
-                    cmd.CommandText = $"[{queueClient.QueueName}].[Clean]";
+                    cmd.CommandText = $"[{QueueClient.QueueName}].[Clean]";
                     cmd.ExecuteNonQuery();
                 }
 
