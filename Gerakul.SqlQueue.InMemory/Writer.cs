@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class Writer : IWriter, IWriterMany
+    public sealed class Writer : IWriter, IWriterMany, IDisposable
     {
         public QueueClient QueueClient { get; }
 
@@ -35,7 +35,6 @@ namespace Gerakul.SqlQueue.InMemory
         {
             this.QueueClient = queueClient;
             this.cleanMinIntervalSeconds = cleanMinIntervalSeconds;
-            this.cleanTimer = new Timer(new TimerCallback(x => CleanIfNeed()), null, cleanMinIntervalSeconds * 60, cleanMinIntervalSeconds * 60);
         }
 
         private void OnCleanException(CleanExceptionEventArgs e)
@@ -46,10 +45,7 @@ namespace Gerakul.SqlQueue.InMemory
 
         private void Reconnect()
         {
-            if (connection != null && (connection.State & System.Data.ConnectionState.Open) == System.Data.ConnectionState.Open)
-            {
-                connection.Close();
-            }
+            CloseResources();
 
             SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(QueueClient.ConnectionString);
             if (csb.Pooling)
@@ -73,6 +69,8 @@ namespace Gerakul.SqlQueue.InMemory
             writeManyCommand.Parameters.Add("messageList", System.Data.SqlDbType.Structured);
             writeManyCommand.Parameters.Add("returnIDs", System.Data.SqlDbType.Bit);
             writeManyCommand.Prepare();
+
+            this.cleanTimer = new Timer(new TimerCallback(x => CleanIfNeed()), null, cleanMinIntervalSeconds * 60, cleanMinIntervalSeconds * 60);
 
             needReconnect = false;
         }
@@ -197,6 +195,25 @@ namespace Gerakul.SqlQueue.InMemory
                 rec.SetSqlBytes(1, new System.Data.SqlTypes.SqlBytes(item));
                 yield return rec;
             }
+        }
+
+        private void CloseResources()
+        {
+            writeCommand?.Dispose();
+            writeManyCommand?.Dispose();
+            connection?.Close();
+            cleanTimer?.Dispose();
+        }
+
+        public void Close()
+        {
+            CloseResources();
+            GC.SuppressFinalize(this);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Close();
         }
     }
 

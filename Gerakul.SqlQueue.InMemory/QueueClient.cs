@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class QueueClient : ISubscriptionManager
+    public sealed class QueueClient : ISubscriptionManager
     {
         public string ConnectionString { get; }
         public string QueueName { get; }

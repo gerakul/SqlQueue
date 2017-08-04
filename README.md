@@ -24,6 +24,8 @@ Note! Database must be configured for memory optimized tables before queue creat
         // writing message to queue
         byte[] message = { 0x01, 0x02, 0x03 };
         var id = writer.Write(message);
+
+        writer.Close();
         
         // writing batch of messages to queue
         byte[][] batch = {
@@ -43,6 +45,8 @@ Note! Database must be configured for memory optimized tables before queue creat
         // making massages completed after handling
         reader.Complete();
 
+        reader.Close();
+
         // deleting subscription
         client.DeleteSubscription("MySubscription");
 
@@ -61,4 +65,6 @@ Note! Database must be configured for memory optimized tables before queue creat
         
         // stop reading
         await autoReader.Stop();
+
+		autoReader.Close();
   ```     

@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class QueueFactory
+    public sealed class QueueFactory
     {
         private string connectionString { get; }
 

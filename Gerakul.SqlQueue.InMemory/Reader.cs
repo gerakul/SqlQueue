@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class Reader : IReader
+    public sealed class Reader : IReader, IDisposable
     {
         public QueueClient QueueClient { get; }
         public string Subscription { get; }
@@ -32,14 +32,11 @@ namespace Gerakul.SqlQueue.InMemory
 
         private void Reconnect()
         {
+            CloseResources();
+
             if (subscriptionID == 0)
             {
                 subscriptionID = QueueClient.FindSubscriptionOrThrowException(Subscription);
-            }
-
-            if (connection != null && (connection.State & System.Data.ConnectionState.Open) == System.Data.ConnectionState.Open)
-            {
-                connection.Close();
             }
 
             SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(QueueClient.ConnectionString);
@@ -58,8 +55,10 @@ namespace Gerakul.SqlQueue.InMemory
             readCommand.Parameters.Add("num", System.Data.SqlDbType.Int);
             readCommand.Parameters.Add("checkLockSeconds", System.Data.SqlDbType.Int);
             readCommand.Parameters.Add("peek", System.Data.SqlDbType.Bit);
-            readCommand.Parameters.Add(new SqlParameter("newLockToken", System.Data.SqlDbType.UniqueIdentifier) {
-                Direction = System.Data.ParameterDirection.Output });
+            readCommand.Parameters.Add(new SqlParameter("newLockToken", System.Data.SqlDbType.UniqueIdentifier)
+            {
+                Direction = System.Data.ParameterDirection.Output
+            });
             readCommand.Prepare();
 
             completeCommand = connection.CreateCommand();
@@ -314,6 +313,26 @@ namespace Gerakul.SqlQueue.InMemory
                 idToComplete = 0;
                 currentLockToken = Guid.Empty;
             }
+        }
+
+        private void CloseResources()
+        {
+            readCommand?.Dispose();
+            completeCommand?.Dispose();
+            relockCommand?.Dispose();
+            unlockCommand?.Dispose();
+            connection?.Close();
+        }
+
+        public void Close()
+        {
+            CloseResources();
+            GC.SuppressFinalize(this);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Close();
         }
     }
 }

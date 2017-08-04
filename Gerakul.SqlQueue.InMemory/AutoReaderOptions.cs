@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class AutoReaderOptions
+    public sealed class AutoReaderOptions
     {
         public int MinDelayMilliseconds { get; set; } = 100;
         public int MaxDelayMilliseconds { get; set; } = 5000;

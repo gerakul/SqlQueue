@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public class AutoReader : IAutoReader
+    public sealed class AutoReader : IAutoReader, IDisposable
     {
         public QueueClient QueueClient { get; }
         public string Subscription { get; }
@@ -216,6 +216,17 @@ namespace Gerakul.SqlQueue.InMemory
             }
 
             EndTask.Start();
+        }
+
+        public void Close()
+        {
+            reader?.Close();
+            GC.SuppressFinalize(this);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Close();
         }
     }
 

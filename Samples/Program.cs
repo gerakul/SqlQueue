@@ -43,6 +43,8 @@ namespace Samples
 
             var ids = writer.WriteMany(batch, true);
 
+            writer.Close();
+
             // creating reader for subscription
             var reader = client.CreateReader("MySubscription");
 
@@ -51,6 +53,8 @@ namespace Samples
 
             // making massages completed after handling
             reader.Complete();
+
+            reader.Close();
 
             // another way to handle messages - using AutoReader
             AutoReading().Wait();
@@ -79,6 +83,8 @@ namespace Samples
 
             writer.WriteMany(batch);
 
+            writer.Close();
+
             // reading
             var autoReader = client.CreateAutoReader("MySubscription");
             await autoReader.Start(Handler);
@@ -86,6 +92,8 @@ namespace Samples
             await Task.Delay(1000);
 
             await autoReader.Stop();
+
+            autoReader.Close();
         }
 
         private static Task Handler(Message[] messages)
