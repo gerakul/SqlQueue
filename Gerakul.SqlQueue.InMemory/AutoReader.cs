@@ -22,6 +22,7 @@ namespace Gerakul.SqlQueue.InMemory
         private object lockObject = new object();
         private Task EndTask;
         private DateTime lastRelock = DateTime.MinValue;
+        private bool needAfterException = false;
 
         public event EventHandler<ExceptionThrownEventArgs> ExceptionThrown;
 
@@ -92,6 +93,12 @@ namespace Gerakul.SqlQueue.InMemory
             {
                 try
                 {
+                    if (needAfterException)
+                    {
+                        AfterException();
+                        needAfterException = false;
+                    }
+
                     var messages = reader.Read(options.NumPerReed);
 
                     if (messages?.Length > 0)
@@ -105,14 +112,9 @@ namespace Gerakul.SqlQueue.InMemory
                         }
                         catch
                         {
-                            if (options.UnlockIfExceptionWasThrownByHandling)
-                            {
-                                reader.Unlock();
-                            }
-                            else
-                            {
-                                reader.Complete();
-                            }
+                            needAfterException = true;
+                            AfterException();
+                            needAfterException = false;
                         }
 
                         sw.Stop();
@@ -172,6 +174,18 @@ namespace Gerakul.SqlQueue.InMemory
             }
 
             relockingLoopCTS.Cancel();
+        }
+
+        private void AfterException()
+        {
+            if (options.UnlockIfExceptionWasThrownByHandling)
+            {
+                reader.Unlock();
+            }
+            else
+            {
+                reader.Complete();
+            }
         }
 
         private async Task RelockingLoop(CancellationToken cancellationToken)
