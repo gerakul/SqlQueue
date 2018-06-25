@@ -290,6 +290,9 @@ where ID = @subscriptionID
 if (@Disabled = 1)
 	throw 50002, 'Subscription is disabled', 1;
 
+if (@LockToken is null)
+	return;
+
 if (@LockToken = @currentLockToken)
     update [{name}].[Subscription]
     set LockTime = null, LockToken = null
