@@ -298,7 +298,7 @@ if (@LockToken = @currentLockToken)
     set LockTime = null, LockToken = null
     where ID = @subscriptionID;
 else
-    throw 50001, 'Sent LockToken don''t equals stored LockToken', 1;
+    throw 50001, 'Sent LockToken doesn''t equal stored LockToken', 1;
 
 END
 
@@ -329,7 +329,7 @@ if (@LockToken = @currentLockToken)
     set LockTime = sysutcdatetime()
     where ID = @subscriptionID;
 else
-    throw 50001, 'Sent LockToken don''t equals stored LockToken', 1;
+    throw 50001, 'Sent LockToken doesn''t equal stored LockToken', 1;
 
 END
 
@@ -422,7 +422,7 @@ if (@LockToken = @currentLockToken)
     set LastCompletedID = @id, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null
     where ID = @subscriptionID;
 else
-    throw 50001, 'Sent LockToken don''t equals stored LockToken', 1;
+    throw 50001, 'Sent LockToken doesn''t equal stored LockToken', 1;
 
 END
 
