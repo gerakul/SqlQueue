@@ -45,6 +45,33 @@ namespace Gerakul.SqlQueue.InMemory
             }
         }
 
+        public bool IsQueueExsists(string name)
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                var cmd = conn.CreateCommand();
+
+                cmd.CommandType = System.Data.CommandType.Text;
+                cmd.CommandText = $"SELECT TOP 1 1 FROM sys.schemas WHERE name = @name";
+                cmd.Parameters.AddWithValue("@name", name);
+
+                using (var r = cmd.ExecuteReader())
+                {
+                    if (r.Read())
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                
+            }
+        }
+
         private SqlCommand GetPostCommand(SqlConnection conn, string name, int minMessNum, int tresholdMessNumBeforeClean)
         {
             var cmd = new SqlCommand($@"
