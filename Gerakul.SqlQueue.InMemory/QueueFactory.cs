@@ -54,7 +54,11 @@ namespace Gerakul.SqlQueue.InMemory
                 var cmd = conn.CreateCommand();
 
                 cmd.CommandType = System.Data.CommandType.Text;
-                cmd.CommandText = $"SELECT TOP 1 1 FROM sys.schemas WHERE name = @name";
+                cmd.CommandText = @"select top 1 1
+                    from sys.tables t
+                        join sys.schemas s on t.schema_id = s.schema_id
+                            and s.name = @name
+                    where t.name = 'Subscription'";
                 cmd.Parameters.AddWithValue("@name", name);
 
                 using (var r = cmd.ExecuteReader())
@@ -68,7 +72,6 @@ namespace Gerakul.SqlQueue.InMemory
                         return false;
                     }
                 }
-                
             }
         }
 
