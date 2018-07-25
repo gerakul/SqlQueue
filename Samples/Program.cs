@@ -21,6 +21,9 @@ namespace Samples
             factory.DeleteQueue("MyQueue");
             factory.CreateQueue("MyQueue");
 
+            // altering queue procedures, besides RestoreState
+            factory.SoftAlterQueue("MyQueue");
+
             // connecting to queue
             var client = QueueClient.Create(connectionString, "MyQueue");
 

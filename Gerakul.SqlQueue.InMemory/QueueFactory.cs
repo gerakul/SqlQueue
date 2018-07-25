@@ -75,6 +75,16 @@ namespace Gerakul.SqlQueue.InMemory
             }
         }
 
+        public void SoftAlterQueue(string name)
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                ExecuteBatches(conn, GetMainProceduresScript(name, true));
+            }
+        }
+
         private SqlCommand GetPostCommand(SqlConnection conn, string name, int minMessNum, int tresholdMessNumBeforeClean)
         {
             var cmd = new SqlCommand($@"
@@ -302,163 +312,6 @@ WITH (DURABILITY = SCHEMA_ONLY, MEMORY_OPTIMIZED = ON);
 GO
 
 
-CREATE PROCEDURE [{name}].[Unlock]
-  @subscriptionID int,
-  @currentLockToken uniqueidentifier
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-declare @LockToken uniqueidentifier
-declare @Disabled bit
-
-select top 1 @LockToken = LockToken, @Disabled = [Disabled]
-from [{name}].[Subscription]
-where ID = @subscriptionID
-
-if (@Disabled = 1)
-	throw 50002, 'Subscription is disabled', 1;
-
-if (@LockToken is null)
-	return;
-
-if (@LockToken = @currentLockToken)
-    update [{name}].[Subscription]
-    set LockTime = null, LockToken = null
-    where ID = @subscriptionID;
-else
-    throw 50001, 'Sent LockToken doesn''t equal stored LockToken', 1;
-
-END
-
-
-GO
-
-
-CREATE PROCEDURE [{name}].[Relock]
-  @subscriptionID int,
-  @currentLockToken uniqueidentifier
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-declare @LockToken uniqueidentifier
-declare @Disabled bit
-
-select top 1 @LockToken = LockToken, @Disabled = [Disabled]
-from [{name}].[Subscription]
-where ID = @subscriptionID
-
-if (@Disabled = 1)
-	throw 50002, 'Subscription is disabled', 1;
-
-if (@LockToken = @currentLockToken)
-    update [{name}].[Subscription]
-    set LockTime = sysutcdatetime()
-    where ID = @subscriptionID;
-else
-    throw 50001, 'Sent LockToken doesn''t equal stored LockToken', 1;
-
-END
-
-
-GO
-
-
-CREATE PROCEDURE [{name}].[GetSubscription]
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
-from [{name}].[Subscription]
-where ID = @subscriptionID
-
-END
-
-GO
-
-CREATE PROCEDURE [{name}].[FindSubscription]
-  @name nvarchar(255)
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
-from [{name}].[Subscription]
-where [Name] = @name
-
-END
-
-GO
-
-CREATE PROCEDURE [{name}].[DisableSubscription] 
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-update [{name}].[Subscription]
-set LockTime = null, LockToken = null, [Disabled] = 1
-where ID = @subscriptionID and [Disabled] = 0
-
-END
-
-GO
-
-
-CREATE PROCEDURE [{name}].[DeleteSubscription]
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-delete from [{name}].[Subscription]
-where ID = @subscriptionID
-
-END
-
-GO
-
-CREATE PROCEDURE [{name}].[Complete]
-  @subscriptionID int,
-  @id bigint,
-  @currentLockToken uniqueidentifier
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-declare @LockToken uniqueidentifier
-declare @Disabled bit
-
-select top 1 @LockToken = LockToken, @Disabled = [Disabled]
-from [{name}].[Subscription]
-where ID = @subscriptionID
-
-if (@Disabled = 1)
-	throw 50002, 'Subscription is disabled', 1;
-
-
-if (@LockToken = @currentLockToken)
-    update [{name}].[Subscription]
-    set LastCompletedID = @id, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null
-    where ID = @subscriptionID;
-else
-    throw 50001, 'Sent LockToken doesn''t equal stored LockToken', 1;
-
-END
-
-GO
-
-
 CREATE PROCEDURE [{name}].[RestoreState] 
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
@@ -521,8 +374,181 @@ END
 
 GO
 
+" + GetMainProceduresScript(name, false);
+        }
 
-CREATE PROCEDURE [{name}].[Write] 
+        private string GetMainProceduresScript(string name, bool alter)
+        {
+            return $@"
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Unlock]
+  @subscriptionID int,
+  @currentLockToken uniqueidentifier
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+declare @LockToken uniqueidentifier
+declare @Disabled bit
+
+select top 1 @LockToken = LockToken, @Disabled = [Disabled]
+from [{name}].[Subscription]
+where ID = @subscriptionID
+
+if (@Disabled = 1)
+	throw 50002, 'Subscription is disabled', 1;
+
+if (@LockToken is null)
+	return;
+
+if (@LockToken = @currentLockToken)
+    update [{name}].[Subscription]
+    set LockTime = null, LockToken = null
+    where ID = @subscriptionID;
+else
+begin
+	declare @errStr nvarchar(1000) = 'Sent LockToken ' + isnull(cast(@currentLockToken as nvarchar(50)), 'NULL') + ' doesn''t equal stored LockToken ' + isnull(cast(@LockToken as nvarchar(50)), 'NULL');
+    throw 50001, @errStr, 1;
+end
+
+
+END
+
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Relock]
+  @subscriptionID int,
+  @currentLockToken uniqueidentifier
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+declare @LockToken uniqueidentifier
+declare @Disabled bit
+
+select top 1 @LockToken = LockToken, @Disabled = [Disabled]
+from [{name}].[Subscription]
+where ID = @subscriptionID
+
+if (@Disabled = 1)
+	throw 50002, 'Subscription is disabled', 1;
+
+if (@LockToken = @currentLockToken)
+    update [{name}].[Subscription]
+    set LockTime = sysutcdatetime()
+    where ID = @subscriptionID;
+else
+begin
+	declare @errStr nvarchar(1000) = 'Sent LockToken ' + isnull(cast(@currentLockToken as nvarchar(50)), 'NULL') + ' doesn''t equal stored LockToken ' + isnull(cast(@LockToken as nvarchar(50)), 'NULL');
+    throw 50001, @errStr, 1;
+end
+
+END
+
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[GetSubscription]
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
+from [{name}].[Subscription]
+where ID = @subscriptionID
+
+END
+
+GO
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[FindSubscription]
+  @name nvarchar(255)
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
+from [{name}].[Subscription]
+where [Name] = @name
+
+END
+
+GO
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[DisableSubscription] 
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+update [{name}].[Subscription]
+set LockTime = null, LockToken = null, [Disabled] = 1
+where ID = @subscriptionID and [Disabled] = 0
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[DeleteSubscription]
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+delete from [{name}].[Subscription]
+where ID = @subscriptionID
+
+END
+
+GO
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Complete]
+  @subscriptionID int,
+  @id bigint,
+  @currentLockToken uniqueidentifier
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+declare @LockToken uniqueidentifier
+declare @Disabled bit
+
+select top 1 @LockToken = LockToken, @Disabled = [Disabled]
+from [{name}].[Subscription]
+where ID = @subscriptionID
+
+if (@Disabled = 1)
+	throw 50002, 'Subscription is disabled', 1;
+
+
+if (@LockToken = @currentLockToken)
+    update [{name}].[Subscription]
+    set LastCompletedID = @id, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null
+    where ID = @subscriptionID;
+else
+begin
+	declare @errStr nvarchar(1000) = 'Sent LockToken ' + isnull(cast(@currentLockToken as nvarchar(50)), 'NULL') + ' doesn''t equal stored LockToken ' + isnull(cast(@LockToken as nvarchar(50)), 'NULL');
+    throw 50001, @errStr, 1;
+end
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Write] 
   @body varbinary(8000),
   @id bigint out
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
@@ -630,7 +656,7 @@ END
 GO
 
 
-CREATE PROCEDURE [{name}].[Read] 
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Read] 
   @subscriptionID int,
   @num int,
   @checkLockSeconds int,
@@ -803,7 +829,7 @@ END
 GO
 
 
-CREATE PROCEDURE [{name}].[EnableSubscription] 
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[EnableSubscription] 
   @subscriptionID int
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
@@ -842,7 +868,7 @@ END
 GO
 
 
-CREATE PROCEDURE [{name}].[CreateSubscription]
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[CreateSubscription]
   @name nvarchar(255),
   @subscriptionID int out
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
@@ -882,7 +908,7 @@ END
 GO
 
 
-CREATE PROCEDURE [{name}].[Clean]
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Clean]
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
   BEGIN ATOMIC 
@@ -944,7 +970,7 @@ END
 GO
 
 
-CREATE PROCEDURE [{name}].[WriteMany] 
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[WriteMany] 
     @messageList {name}.MessageList READONLY,
     @returnIDs bit
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
