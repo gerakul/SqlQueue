@@ -1,8 +1,4 @@
 ﻿
-
-
-
-
 CREATE PROCEDURE [Queue_Schema_Name].[Complete]
   @subscriptionID int,
   @id bigint,
@@ -28,6 +24,9 @@ if (@LockToken = @currentLockToken)
     set LastCompletedID = @id, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null
     where ID = @subscriptionID;
 else
-    throw 50001, 'Sent LockToken don''t equals stored LockToken', 1;
+begin
+	declare @errStr nvarchar(1000) = 'Sent LockToken ' + isnull(cast(@currentLockToken as nvarchar(50)), 'NULL') + ' doesn''t equal stored LockToken ' + isnull(cast(@LockToken as nvarchar(50)), 'NULL');
+    throw 50001, @errStr, 1;
+end
 
 END

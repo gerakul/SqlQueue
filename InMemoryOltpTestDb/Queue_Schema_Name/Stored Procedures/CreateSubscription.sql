@@ -1,10 +1,9 @@
 ﻿
-
-
-
-
 CREATE PROCEDURE [Queue_Schema_Name].[CreateSubscription]
   @name nvarchar(255),
+  @maxIdleIntervalSeconds int = null,
+  @maxUncompletedMessages int = null,
+  @actionOnLimitExceeding int = null,
   @subscriptionID int out
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
@@ -29,11 +28,13 @@ end
 
 
 if (@IsFirstActive = 1)
-    insert into [Queue_Schema_Name].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled])
-    values (@name, @MaxID1, sysutcdatetime(), 0)
+    insert into [Queue_Schema_Name].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
+		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
+    values (@name, @MaxID1, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
 else
-    insert into [Queue_Schema_Name].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled])
-    values (@name, @MaxID2, sysutcdatetime(), 0)
+    insert into [Queue_Schema_Name].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
+		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
+    values (@name, @MaxID2, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
 
 set @subscriptionID = scope_identity()
 

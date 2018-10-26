@@ -89,5 +89,8 @@
     <Build Include="Security\Queue_Schema_Name.sql" />
     <Build Include="Queue_Schema_Name\Stored Procedures\WriteMany.sql" />
     <Build Include="Queue_Schema_Name\User Defined Types\MessageList.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\SetSubscriptionSettings.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\GetSubscriptionInfo.sql" />
+    <Build Include="Queue_Schema_Name\Stored Procedures\GetAllSubscriptionsInfo.sql" />
   </ItemGroup>
 </Project>

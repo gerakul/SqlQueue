@@ -70,7 +70,7 @@ namespace Gerakul.SqlQueue.InMemory
             writeManyCommand.Parameters.Add("returnIDs", System.Data.SqlDbType.Bit);
             writeManyCommand.Prepare();
 
-            this.cleanTimer = new Timer(new TimerCallback(x => CleanIfNeed()), null, cleanMinIntervalSeconds * 60, cleanMinIntervalSeconds * 60);
+            this.cleanTimer = new Timer(new TimerCallback(x => CleanIfNeed()), null, cleanMinIntervalSeconds * 1000, cleanMinIntervalSeconds * 1000);
 
             needReconnect = false;
         }

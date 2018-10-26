@@ -1,8 +1,8 @@
-﻿using Gerakul.SqlQueue.InMemory.Core;
+﻿using Gerakul.SqlQueue.Core;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
-using System.Text;
+using System.Data.SqlTypes;
 
 namespace Gerakul.SqlQueue.InMemory
 {
@@ -37,7 +37,7 @@ namespace Gerakul.SqlQueue.InMemory
             return new QueueClient(connectionString, name);
         }
 
-        public int CreateSubscription(string name)
+        public int CreateSubscription(string name, SubscriptionSettings settings = null)
         {
             using (var conn = new SqlConnection(ConnectionString))
             {
@@ -47,11 +47,44 @@ namespace Gerakul.SqlQueue.InMemory
                 cmd.CommandType = System.Data.CommandType.StoredProcedure;
                 cmd.CommandText = $"[{QueueName}].[CreateSubscription]";
                 cmd.Parameters.AddWithValue("name", name);
+
+                cmd.Parameters.AddWithValue("maxIdleIntervalSeconds", settings?.MaxIdleIntervalSeconds != null
+                    ? new SqlInt32(settings.MaxIdleIntervalSeconds.Value) : SqlInt32.Null);
+                cmd.Parameters.AddWithValue("maxUncompletedMessages", settings?.MaxUncompletedMessages != null
+                    ? new SqlInt32(settings.MaxUncompletedMessages.Value) : SqlInt32.Null);
+                cmd.Parameters.AddWithValue("actionOnLimitExceeding", settings?.ActionOnLimitExceeding != null
+                    ? new SqlInt32((int)settings.ActionOnLimitExceeding.Value) : SqlInt32.Null);
+
                 cmd.Parameters.Add(new SqlParameter("subscriptionID", System.Data.SqlDbType.Int) { Direction = System.Data.ParameterDirection.Output });
 
                 cmd.ExecuteNonQuery();
 
-                return (int)cmd.Parameters[1].Value;
+                return (int)cmd.Parameters[4].Value;
+            }
+        }
+
+        public int FindSubscription(string name)
+        {
+            using (SqlConnection conn = new SqlConnection(ConnectionString))
+            {
+                conn.Open();
+
+                var cmd = conn.CreateCommand();
+                cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                cmd.CommandText = $"[{QueueName}].[FindSubscription]";
+                cmd.Parameters.AddWithValue("name", name);
+
+                using (var r = cmd.ExecuteReader())
+                {
+                    if (r.Read())
+                    {
+                        return r.GetInt32(0);
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
             }
         }
 
@@ -106,29 +139,82 @@ namespace Gerakul.SqlQueue.InMemory
             }
         }
 
-        public int FindSubscription(string name)
+        public void UpdateSubscription(string name, SubscriptionSettings settings)
         {
-            using (SqlConnection conn = new SqlConnection(ConnectionString))
+            var subID = FindSubscriptionOrThrowException(name);
+
+            using (var conn = new SqlConnection(ConnectionString))
             {
                 conn.Open();
 
                 var cmd = conn.CreateCommand();
                 cmd.CommandType = System.Data.CommandType.StoredProcedure;
-                cmd.CommandText = $"[{QueueName}].[FindSubscription]";
-                cmd.Parameters.AddWithValue("name", name);
+                cmd.CommandText = $"[{QueueName}].[SetSubscriptionSettings]";
+                cmd.Parameters.AddWithValue("subscriptionID", subID);
+                cmd.Parameters.AddWithValue("maxIdleIntervalSeconds", settings.MaxIdleIntervalSeconds.HasValue 
+                    ? new SqlInt32(settings.MaxIdleIntervalSeconds.Value) : SqlInt32.Null);
+                cmd.Parameters.AddWithValue("maxUncompletedMessages", settings.MaxUncompletedMessages.HasValue
+                    ? new SqlInt32(settings.MaxUncompletedMessages.Value) : SqlInt32.Null);
+                cmd.Parameters.AddWithValue("actionOnLimitExceeding", settings.ActionOnLimitExceeding.HasValue
+                    ? new SqlInt32((int)settings.ActionOnLimitExceeding.Value) : SqlInt32.Null);
 
-                using (var r = cmd.ExecuteReader())
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public SubscriptionInfo GetSubscriptionInfo(string name)
+        {
+            var subID = FindSubscriptionOrThrowException(name);
+
+            using (var conn = new SqlConnection(ConnectionString))
+            {
+                conn.Open();
+
+                var cmd = conn.CreateCommand();
+                cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                cmd.CommandText = $"[{QueueName}].[GetSubscriptionInfo]";
+                cmd.Parameters.AddWithValue("subscriptionID", subID);
+
+                using (var reader = cmd.ExecuteReader())
                 {
-                    if (r.Read())
+                    reader.Read();
+
+                    return ReadSubscriptionInfo(reader);
+                }
+            }
+        }
+
+        public IEnumerable<SubscriptionInfo> GetAllSubscriptionsInfo()
+        {
+            using (var conn = new SqlConnection(ConnectionString))
+            {
+                conn.Open();
+
+                var cmd = conn.CreateCommand();
+                cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                cmd.CommandText = $"[{QueueName}].[GetAllSubscriptionsInfo]";
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
                     {
-                        return r.GetInt32(0);
-                    }
-                    else
-                    {
-                        return 0;
+                        yield return ReadSubscriptionInfo(reader);
                     }
                 }
             }
+        }
+
+        private SubscriptionInfo ReadSubscriptionInfo(SqlDataReader reader)
+        {
+            return new SubscriptionInfo(reader.GetInt32(0), reader.GetString(1), reader.GetInt64(2), reader.GetDateTime(3), 
+                reader.IsDBNull(4) ? (DateTime?)null : reader.GetDateTime(4), reader.GetBoolean(5), 
+                reader.GetInt64(9), reader.GetInt32(10), 
+                new SubscriptionSettings()
+                {
+                    MaxIdleIntervalSeconds = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6),
+                    MaxUncompletedMessages = reader.IsDBNull(7) ? (int?)null : reader.GetInt32(7),
+                    ActionOnLimitExceeding = reader.IsDBNull(8) ? (ActionsOnLimitExceeding?)null : (ActionsOnLimitExceeding)reader.GetInt32(8)
+                });
         }
 
         internal int FindSubscriptionOrThrowException(string name)

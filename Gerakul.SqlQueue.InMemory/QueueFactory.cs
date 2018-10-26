@@ -134,6 +134,18 @@ IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 
     DROP PROCEDURE [{name}].[EnableSubscription] 
 GO
 
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetSubscriptionInfo' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[GetSubscriptionInfo] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetAllSubscriptionsInfo' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[GetAllSubscriptionsInfo] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'SetSubscriptionSettings' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[SetSubscriptionSettings] 
+GO
+
 IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Read' AND ROUTINE_SCHEMA = '{name}')
     DROP PROCEDURE [{name}].[Read] 
 GO
@@ -231,13 +243,16 @@ GO
 
 
 CREATE TABLE [{name}].[Subscription] (
-    [ID]                INT              IDENTITY (1, 1) NOT NULL,
-    [Name]              NVARCHAR (255)   NOT NULL,
-    [LastCompletedID]   BIGINT           NOT NULL,
-    [LastCompletedTime] DATETIME2 (7)    NOT NULL,
-    [LockTime]          DATETIME2 (7)    NULL,
-    [LockToken]         UNIQUEIDENTIFIER NULL,
-    [Disabled]          BIT              NOT NULL,
+    [ID]                     INT              IDENTITY (1, 1) NOT NULL,
+    [Name]                   NVARCHAR (255)   NOT NULL,
+    [LastCompletedID]        BIGINT           NOT NULL,
+    [LastCompletedTime]      DATETIME2 (7)    NOT NULL,
+    [LockTime]               DATETIME2 (7)    NULL,
+    [LockToken]              UNIQUEIDENTIFIER NULL,
+    [Disabled]               BIT              NOT NULL,
+    [MaxIdleIntervalSeconds] INT              NULL,
+    [MaxUncompletedMessages] INT              NULL,
+    [ActionOnLimitExceeding] INT              NULL,
     CONSTRAINT [PK_Subscription] PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 256),
     CONSTRAINT [IX_Subscription_Name] UNIQUE NONCLUSTERED HASH ([Name]) WITH (BUCKET_COUNT = 256)
 )
@@ -870,6 +885,9 @@ GO
 
 {(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[CreateSubscription]
   @name nvarchar(255),
+  @maxIdleIntervalSeconds int = null,
+  @maxUncompletedMessages int = null,
+  @actionOnLimitExceeding int = null,
   @subscriptionID int out
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
@@ -894,11 +912,14 @@ end
 
 
 if (@IsFirstActive = 1)
-    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled])
-    values (@name, @MaxID1, sysutcdatetime(), 0)
+    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
+		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
+    values (@name, @MaxID1, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
 else
-    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled])
-    values (@name, @MaxID2, sysutcdatetime(), 0)
+    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
+		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
+    values (@name, @MaxID2, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
+
 
 set @subscriptionID = scope_identity()
 
@@ -914,21 +935,43 @@ GO
   BEGIN ATOMIC 
   WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
 
+declare @Modified datetime2(7)
+declare @IsFirstActive bit
 declare @MaxID1 bigint
 declare @NeedClean1 bit
 declare @MaxID2 bigint
 declare @NeedClean2 bit
 
-select top 1 @MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
+select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive,
+	@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
 from [{name}].[State]
 
 if (@MaxID1 is null)
 begin
     exec [{name}].[RestoreState]
 
-    select top 1 @MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
+    select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive,
+		@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
     from [{name}].[State]
 end
+
+declare @maxID bigint
+
+if (@IsFirstActive = 1)
+	set @maxID = @MaxID1
+else 
+	set @maxID = @MaxID2
+
+delete from [{name}].Subscription
+where ActionOnLimitExceeding = 1 
+	and ((@maxID - LastCompletedID) > MaxUncompletedMessages 
+		or datediff(second, LastCompletedTime, @Modified) > MaxIdleIntervalSeconds)
+
+update [{name}].Subscription
+set LockTime = null, LockToken = null, [Disabled] = 1
+where ActionOnLimitExceeding = 2 and [Disabled] = 0 
+	and ((@maxID - LastCompletedID) > MaxUncompletedMessages 
+		or datediff(second, LastCompletedTime, @Modified) > MaxIdleIntervalSeconds)
 
 if (@NeedClean1 = 1)
 begin
@@ -964,9 +1007,7 @@ begin
     end
 end
 
-
 END
-
 GO
 
 
@@ -1090,6 +1131,111 @@ begin
     from @messageList
     order by ID
 end
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[GetSubscriptionInfo] 
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+
+declare @Modified datetime2(7)
+declare @IsFirstActive bit
+declare @MaxID1 bigint
+declare @MaxID2 bigint
+
+select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2
+from [{name}].[State]
+
+if (@MaxID1 is null)
+begin
+    exec [{name}].[RestoreState]
+
+    select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2
+    from [{name}].[State]
+end
+
+declare @maxID bigint
+
+if (@IsFirstActive = 1)
+	set @maxID = @MaxID1
+else 
+	set @maxID = @MaxID2
+
+select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [Disabled],
+	[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding],
+	@maxID - [LastCompletedID] as UncompletedMessages, 
+	datediff(second, [LastCompletedTime], @Modified) as IdleIntervalSeconds
+from [{name}].[Subscription]
+where ID = @subscriptionID
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[GetAllSubscriptionsInfo] 
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+
+declare @Modified datetime2(7)
+declare @IsFirstActive bit
+declare @MaxID1 bigint
+declare @MaxID2 bigint
+
+select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2
+from [{name}].[State]
+
+if (@MaxID1 is null)
+begin
+    exec [{name}].[RestoreState]
+
+    select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2
+    from [{name}].[State]
+end
+
+declare @maxID bigint
+
+if (@IsFirstActive = 1)
+	set @maxID = @MaxID1
+else 
+	set @maxID = @MaxID2
+
+select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [Disabled],
+	[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding],
+	@maxID - [LastCompletedID] as UncompletedMessages, 
+	datediff(second, [LastCompletedTime], @Modified) as IdleIntervalSeconds
+from [{name}].[Subscription]
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[SetSubscriptionSettings] 
+  @subscriptionID int,
+  @maxIdleIntervalSeconds int,
+  @maxUncompletedMessages int,
+  @actionOnLimitExceeding int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+update [{name}].[Subscription]
+set [MaxIdleIntervalSeconds] = @maxIdleIntervalSeconds, 
+	[MaxUncompletedMessages] = @maxUncompletedMessages, 
+	[ActionOnLimitExceeding] = @actionOnLimitExceeding
+where [ID] = @subscriptionID
 
 END
 

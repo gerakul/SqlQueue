@@ -1,7 +1,4 @@
 ﻿
-
-
-
 CREATE PROCEDURE [Queue_Schema_Name].[Unlock]
   @subscriptionID int,
   @currentLockToken uniqueidentifier
@@ -20,11 +17,18 @@ where ID = @subscriptionID
 if (@Disabled = 1)
 	throw 50002, 'Subscription is disabled', 1;
 
+if (@LockToken is null)
+	return;
+
 if (@LockToken = @currentLockToken)
     update [Queue_Schema_Name].[Subscription]
     set LockTime = null, LockToken = null
     where ID = @subscriptionID;
 else
-    throw 50001, 'Sent LockToken don''t equals stored LockToken', 1;
+begin
+	declare @errStr nvarchar(1000) = 'Sent LockToken ' + isnull(cast(@currentLockToken as nvarchar(50)), 'NULL') + ' doesn''t equal stored LockToken ' + isnull(cast(@LockToken as nvarchar(50)), 'NULL');
+    throw 50001, @errStr, 1;
+end
+
 
 END

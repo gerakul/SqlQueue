@@ -30,6 +30,31 @@ namespace Samples
             // creating subscription
             client.CreateSubscription("MySubscription");
 
+            // creating subscription with settings
+            client.CreateSubscription("ProtectedSubscription", new SubscriptionSettings()
+            {
+                // take action if difference between last write and last complete exceeded MaxIdleIntervalSeconds
+                MaxIdleIntervalSeconds = 3600,
+                // take action if number of uncompleted messages exceeded MaxUncompletedMessages
+                MaxUncompletedMessages = 200000,
+                // action to take
+                ActionOnLimitExceeding = ActionsOnLimitExceeding.DeleteSubscription
+            });
+
+            // update subscription settings
+            client.UpdateSubscription("ProtectedSubscription", new SubscriptionSettings()
+            {
+                MaxIdleIntervalSeconds = 7200,
+                MaxUncompletedMessages = 300000,
+                ActionOnLimitExceeding = ActionsOnLimitExceeding.DisableSubscription
+            });
+
+            // retrieving information about subscription
+            var info = client.GetSubscriptionInfo("MySubscription");
+
+            // retrieving information about all subscriptions
+            var allInfo = client.GetAllSubscriptionsInfo();
+
             // creating writer
             var writer = client.CreateWriter();
 
