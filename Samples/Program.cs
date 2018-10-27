@@ -53,7 +53,7 @@ namespace Samples
             var info = client.GetSubscriptionInfo("MySubscription");
 
             // retrieving information about all subscriptions
-            var allInfo = client.GetAllSubscriptionsInfo();
+            var allInfo = client.GetAllSubscriptionsInfo().ToArray();
 
             // creating writer
             var writer = client.CreateWriter();

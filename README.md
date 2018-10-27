@@ -41,7 +41,7 @@ Note! Database must be configured for memory optimized tables before queue creat
         var info = client.GetSubscriptionInfo("MySubscription");
 
         // retrieving information about all subscriptions
-        var allInfo = client.GetAllSubscriptionsInfo();
+        var allInfo = client.GetAllSubscriptionsInfo().ToArray();
 
         // creating writer
         var writer = client.CreateWriter();
@@ -49,8 +49,6 @@ Note! Database must be configured for memory optimized tables before queue creat
         // writing message to queue
         byte[] message = { 0x01, 0x02, 0x03 };
         var id = writer.Write(message);
-
-        writer.Close();
         
         // writing batch of messages to queue
         byte[][] batch = {
@@ -60,6 +58,8 @@ Note! Database must be configured for memory optimized tables before queue creat
         };
 
         var ids = writer.WriteMany(batch, true);
+
+        writer.Close();
 
         // creating reader for subscription
         var reader = client.CreateReader("MySubscription");

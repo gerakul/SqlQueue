@@ -26,7 +26,7 @@ namespace Gerakul.SqlQueue.InMemory
                 preparationCmd.CommandText = "ALTER DATABASE CURRENT SET DELAYED_DURABILITY = DISABLED";
                 preparationCmd.ExecuteNonQuery();
 
-                ExecuteBatches(conn, GetCreationScript(name));
+                Helper.ExecuteBatches(conn, GetCreationScript(name));
 
                 GetPostCommand(conn, name, minMessNum, tresholdMessNumBeforeClean).ExecuteNonQuery();
 
@@ -41,7 +41,7 @@ namespace Gerakul.SqlQueue.InMemory
                 conn.Open();
 
 
-                ExecuteBatches(conn, GetDeletionScript(name));
+                Helper.ExecuteBatches(conn, GetDeletionScript(name));
             }
         }
 
@@ -81,7 +81,7 @@ namespace Gerakul.SqlQueue.InMemory
             {
                 conn.Open();
 
-                ExecuteBatches(conn, GetMainProceduresScript(name, true));
+                Helper.ExecuteBatches(conn, GetMainProceduresScript(name, true));
             }
         }
 
@@ -96,22 +96,6 @@ VALUES (1, @MinNum, @TresholdNum)
             cmd.Parameters.AddWithValue("TresholdNum", tresholdMessNumBeforeClean);
 
             return cmd;
-        }
-
-        private void ExecuteBatches(SqlConnection conn, string text)
-        {
-            foreach (var item in GetSqlBatches(text))
-            {
-                if (!string.IsNullOrWhiteSpace(item))
-                {
-                    new SqlCommand(item, conn).ExecuteNonQuery();
-                }
-            }
-        }
-
-        private string[] GetSqlBatches(string text)
-        {
-            return Regex.Split(text, @"^\s*go\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         }
 
         private string GetDeletionScript(string name)
