@@ -1,11 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard1.4;net46</TargetFrameworks>
-    <Version>1.0.4</Version>
+    <TargetFrameworks>netstandard1.4;netstandard2.0;net46</TargetFrameworks>
+    <Version>1.1.0</Version>
     <Authors>gerakul</Authors>
-    <Company />
-    <Product />
     <Description>Core classes and interfaces for queue based on Sql Server</Description>
     <RepositoryUrl>https://github.com/gerakul/SqlQueue</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
