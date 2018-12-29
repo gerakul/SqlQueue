@@ -5,8 +5,11 @@ using System.Text;
 
 namespace Gerakul.SqlQueue.InMemory
 {
-    public static class Maintenance
+    public class Maintenance
     {
+        private string connectionString;
+        private string queueName;
+
         public static void UpdateFrom_1_2_0_To_1_3_0(string connectionString, string queueName)
         {
             string script = $@"
@@ -263,6 +266,53 @@ GO
                 conn.Open();
 
                 Helper.ExecuteBatches(conn, script);
+            }
+        }
+
+        public Maintenance(string connectionString, string queueName)
+        {
+            this.connectionString = connectionString;
+            this.queueName = queueName;
+        }
+
+        public void AlterMainProcedures()
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                Helper.ExecuteBatches(conn, QueueFactory.GetMainProceduresScript(queueName, true));
+            }
+        }
+
+        public void DropAllProcedures()
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresDeletionScript(queueName));
+            }
+        }
+
+        public void CreateAllProcedures()
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
+            }
+        }
+
+        public void DropAndCreateAllProcedures()
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresDeletionScript(queueName));
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
             }
         }
     }

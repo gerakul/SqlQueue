@@ -75,16 +75,6 @@ namespace Gerakul.SqlQueue.InMemory
             }
         }
 
-        public void SoftAlterQueue(string name)
-        {
-            using (var conn = new SqlConnection(connectionString))
-            {
-                conn.Open();
-
-                Helper.ExecuteBatches(conn, GetMainProceduresScript(name, true));
-            }
-        }
-
         private SqlCommand GetPostCommand(SqlConnection conn, string name, int minMessNum, int tresholdMessNumBeforeClean)
         {
             var cmd = new SqlCommand($@"
@@ -98,77 +88,9 @@ VALUES (1, @MinNum, @TresholdNum)
             return cmd;
         }
 
-        private string GetDeletionScript(string name)
+        internal static string GetDeletionScript(string name)
         {
-            return $@"
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'WriteMany' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[WriteMany]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Clean' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[Clean]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'CreateSubscription' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[CreateSubscription]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'EnableSubscription' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[EnableSubscription] 
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetSubscriptionInfo' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[GetSubscriptionInfo] 
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetAllSubscriptionsInfo' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[GetAllSubscriptionsInfo] 
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'SetSubscriptionSettings' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[SetSubscriptionSettings] 
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Read' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[Read] 
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Write' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[Write]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'RestoreState' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[RestoreState]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Complete' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[Complete]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'DeleteSubscription' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[DeleteSubscription]
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'DisableSubscription' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[DisableSubscription] 
-GO
-
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'FindSubscription' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[FindSubscription]
-GO
- 
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetSubscription' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[GetSubscription]
-GO
- 
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Relock' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[Relock]
-GO
- 
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Unlock' AND ROUTINE_SCHEMA = '{name}')
-    DROP PROCEDURE [{name}].[Unlock]
-GO
+            return GetProceduresDeletionScript(name) + $@"
 
 IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Messages0' AND TABLE_SCHEMA = '{name}')
     DROP TABLE [{name}].[Messages0]
@@ -203,7 +125,7 @@ IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.SCHEMATA WHERE [SCHEMA_NAME] =
 ";
         }
 
-        private string GetCreationScript(string name)
+        internal static string GetCreationScript(string name)
         {
             return $@"
 
@@ -307,9 +229,88 @@ CREATE TABLE [{name}].[Messages0] (
 )
 WITH (DURABILITY = SCHEMA_ONLY, MEMORY_OPTIMIZED = ON);
 
-
 GO
 
+" + GetProceduresCreationScript(name);
+        }
+
+        internal static string GetProceduresDeletionScript(string name)
+        {
+            return $@"
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'CreateSubscription' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[CreateSubscription]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'EnableSubscription' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[EnableSubscription] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'DeleteSubscription' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[DeleteSubscription]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'DisableSubscription' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[DisableSubscription] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'FindSubscription' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[FindSubscription]
+GO
+ 
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetSubscription' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[GetSubscription]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetSubscriptionInfo' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[GetSubscriptionInfo] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'GetAllSubscriptionsInfo' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[GetAllSubscriptionsInfo] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'SetSubscriptionSettings' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[SetSubscriptionSettings] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Write' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[Write]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'WriteMany' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[WriteMany]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Clean' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[Clean]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Read' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[Read] 
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Complete' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[Complete]
+GO
+ 
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Relock' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[Relock]
+GO
+ 
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'Unlock' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[Unlock]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'RestoreState' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[RestoreState]
+GO
+";
+        }
+
+        internal static string GetProceduresCreationScript(string name)
+        {
+            return $@"
 
 CREATE PROCEDURE [{name}].[RestoreState] 
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
@@ -376,7 +377,7 @@ GO
 " + GetMainProceduresScript(name, false);
         }
 
-        private string GetMainProceduresScript(string name, bool alter)
+        internal static string GetMainProceduresScript(string name, bool alter)
         {
             return $@"
 
@@ -414,7 +415,6 @@ end
 
 END
 
-
 GO
 
 
@@ -448,69 +448,8 @@ end
 
 END
 
-
 GO
 
-
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[GetSubscription]
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
-from [{name}].[Subscription]
-where ID = @subscriptionID
-
-END
-
-GO
-
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[FindSubscription]
-  @name nvarchar(255)
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
-from [{name}].[Subscription]
-where [Name] = @name
-
-END
-
-GO
-
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[DisableSubscription] 
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-update [{name}].[Subscription]
-set LockTime = null, LockToken = null, [Disabled] = 1
-where ID = @subscriptionID and [Disabled] = 0
-
-END
-
-GO
-
-
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[DeleteSubscription]
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-delete from [{name}].[Subscription]
-where ID = @subscriptionID
-
-END
-
-GO
 
 {(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Complete]
   @subscriptionID int,
@@ -540,114 +479,6 @@ else
 begin
 	declare @errStr nvarchar(1000) = 'Sent LockToken ' + isnull(cast(@currentLockToken as nvarchar(50)), 'NULL') + ' doesn''t equal stored LockToken ' + isnull(cast(@LockToken as nvarchar(50)), 'NULL');
     throw 50001, @errStr, 1;
-end
-
-END
-
-GO
-
-
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Write] 
-  @body varbinary(8000),
-  @id bigint out
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-declare @date datetime2(7) = sysutcdatetime()
-declare @stateUpdated bit = 0
-
-declare @IsFirstActive bit
-declare @MaxID1 bigint
-declare @MaxID2 bigint
-declare @Num1 int
-declare @Num2 int
-declare @NeedClean1 bit
-declare @NeedClean2 bit
-declare @MinNum int
-declare @TresholdNum int
-
-select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
-    @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-    @MinNum = MinNum, @TresholdNum = TresholdNum
-from [{name}].[State]
-
-if (@MaxID1 is null)
-begin
-    exec [{name}].[RestoreState]
-
-    select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
-        @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-        @MinNum = MinNum, @TresholdNum = TresholdNum
-    from [{name}].[State]
-end
-
--- всегда оставляем последнее сообщение
-if (@MinNum < 1)
-    set @MinNum = 1
-
--- если можем очистить другую таблицу, то помечаем для очистки
-if (@IsFirstActive = 1 and @Num1 >= @MinNum and @MaxID2 > 0 and @NeedClean2 = 0)
-begin
-    update [{name}].[State]
-    set Modified = @date, NeedClean2 = 1
-end
-else if (@IsFirstActive = 0 and @Num2 >= @MinNum and @MaxID1 > 0 and @NeedClean1 = 0)
-begin
-    update [{name}].[State]
-    set Modified = @date, NeedClean1 = 1
-end
-
-
--- если превысили количество сообщений и другая таблица свободна, то переключаемся
-if (@IsFirstActive = 1 and @Num1 >= @TresholdNum and @MaxID2 = 0)
-begin
-    set @IsFirstActive = 0
-    set @id = @MaxID1 + 1
-
-    update [{name}].[State]
-    set Modified = @date, MinID2 = @id, MaxID2 = @id, Num2 = 1, IsFirstActive = 0
-
-    set @stateUpdated = 1
-end
-else if (@IsFirstActive = 0 and @Num2 >= @TresholdNum and @MaxID1 = 0)
-begin
-    set @IsFirstActive = 1
-    set @id = @MaxID2 + 1
-
-    update [{name}].[State]
-    set Modified = @date, MinID1 = @id, MaxID1 = @id, Num1 = 1, IsFirstActive = 1
-
-    set @stateUpdated = 1
-end
-  
-
-if (@IsFirstActive = 1)
-begin
-    if (@stateUpdated = 0)
-    begin
-        set @id = @MaxID1 + 1
-
-        update [{name}].[State]
-	    set Modified = @date, MaxID1 = @id, Num1 = @Num1 + 1
-    end
-
-    insert into [{name}].Messages1 (ID, Created, Body)
-    values (@id, @date, @body)
-end
-else
-begin
-    if (@stateUpdated = 0)
-    begin
-        set @id = @MaxID2 + 1
-
-        update [{name}].[State]
-        set Modified = @date, MaxID2 = @id, Num2 = @Num2 + 1
-    end
-
-    insert into [{name}].Messages2 (ID, Created, Body)
-    values (@id, @date, @body)
 end
 
 END
@@ -828,91 +659,6 @@ END
 GO
 
 
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[EnableSubscription] 
-  @subscriptionID int
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-
-declare @MaxID1 int
-declare @MaxID2 int
-declare @IsFirstActive bit
-
-select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
-from [{name}].[State]
-
-if (@MaxID1 is null)
-begin
-    exec [{name}].[RestoreState]
-
-    select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
-    from [{name}].[State]
-end
-
-
-if (@IsFirstActive = 1)
-    update [{name}].[Subscription]
-    set LastCompletedID = @MaxID1, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null, [Disabled] = 0
-    where ID = @subscriptionID and [Disabled] = 1
-else
-    update [{name}].[Subscription]
-    set LastCompletedID = @MaxID2, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null, [Disabled] = 0
-    where ID = @subscriptionID and [Disabled] = 1
-
-END
-
-
-GO
-
-
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[CreateSubscription]
-  @name nvarchar(255),
-  @maxIdleIntervalSeconds int = null,
-  @maxUncompletedMessages int = null,
-  @actionOnLimitExceeding int = null,
-  @subscriptionID int out
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-
-declare @MaxID1 int
-declare @MaxID2 int
-declare @IsFirstActive bit
-
-select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
-from [{name}].[State]
-
-if (@MaxID1 is null)
-begin
-    exec [{name}].[RestoreState]
-
-    select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
-    from [{name}].[State]
-end
-
-
-if (@IsFirstActive = 1)
-    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
-		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
-    values (@name, @MaxID1, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
-else
-    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
-		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
-    values (@name, @MaxID2, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
-
-
-set @subscriptionID = scope_identity()
-
-END
-
-
-GO
-
-
 {(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Clean]
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
@@ -992,6 +738,115 @@ begin
 end
 
 END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Write] 
+  @body varbinary(8000),
+  @id bigint out
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+declare @date datetime2(7) = sysutcdatetime()
+declare @stateUpdated bit = 0
+
+declare @IsFirstActive bit
+declare @MaxID1 bigint
+declare @MaxID2 bigint
+declare @Num1 int
+declare @Num2 int
+declare @NeedClean1 bit
+declare @NeedClean2 bit
+declare @MinNum int
+declare @TresholdNum int
+
+select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
+    @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
+    @MinNum = MinNum, @TresholdNum = TresholdNum
+from [{name}].[State]
+
+if (@MaxID1 is null)
+begin
+    exec [{name}].[RestoreState]
+
+    select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
+        @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
+        @MinNum = MinNum, @TresholdNum = TresholdNum
+    from [{name}].[State]
+end
+
+-- всегда оставляем последнее сообщение
+if (@MinNum < 1)
+    set @MinNum = 1
+
+-- если можем очистить другую таблицу, то помечаем для очистки
+if (@IsFirstActive = 1 and @Num1 >= @MinNum and @MaxID2 > 0 and @NeedClean2 = 0)
+begin
+    update [{name}].[State]
+    set Modified = @date, NeedClean2 = 1
+end
+else if (@IsFirstActive = 0 and @Num2 >= @MinNum and @MaxID1 > 0 and @NeedClean1 = 0)
+begin
+    update [{name}].[State]
+    set Modified = @date, NeedClean1 = 1
+end
+
+
+-- если превысили количество сообщений и другая таблица свободна, то переключаемся
+if (@IsFirstActive = 1 and @Num1 >= @TresholdNum and @MaxID2 = 0)
+begin
+    set @IsFirstActive = 0
+    set @id = @MaxID1 + 1
+
+    update [{name}].[State]
+    set Modified = @date, MinID2 = @id, MaxID2 = @id, Num2 = 1, IsFirstActive = 0
+
+    set @stateUpdated = 1
+end
+else if (@IsFirstActive = 0 and @Num2 >= @TresholdNum and @MaxID1 = 0)
+begin
+    set @IsFirstActive = 1
+    set @id = @MaxID2 + 1
+
+    update [{name}].[State]
+    set Modified = @date, MinID1 = @id, MaxID1 = @id, Num1 = 1, IsFirstActive = 1
+
+    set @stateUpdated = 1
+end
+  
+
+if (@IsFirstActive = 1)
+begin
+    if (@stateUpdated = 0)
+    begin
+        set @id = @MaxID1 + 1
+
+        update [{name}].[State]
+	    set Modified = @date, MaxID1 = @id, Num1 = @Num1 + 1
+    end
+
+    insert into [{name}].Messages1 (ID, Created, Body)
+    values (@id, @date, @body)
+end
+else
+begin
+    if (@stateUpdated = 0)
+    begin
+        set @id = @MaxID2 + 1
+
+        update [{name}].[State]
+        set Modified = @date, MaxID2 = @id, Num2 = @Num2 + 1
+    end
+
+    insert into [{name}].Messages2 (ID, Created, Body)
+    values (@id, @date, @body)
+end
+
+END
+
 GO
 
 
@@ -1117,6 +972,152 @@ begin
 end
 
 END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[GetSubscription]
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
+from [{name}].[Subscription]
+where ID = @subscriptionID
+
+END
+
+GO
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[FindSubscription]
+  @name nvarchar(255)
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+select [ID], [Name], [LastCompletedID], [LastCompletedTime], [LockTime], [LockToken], [Disabled]
+from [{name}].[Subscription]
+where [Name] = @name
+
+END
+
+GO
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[DisableSubscription] 
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+update [{name}].[Subscription]
+set LockTime = null, LockToken = null, [Disabled] = 1
+where ID = @subscriptionID and [Disabled] = 0
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[DeleteSubscription]
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+delete from [{name}].[Subscription]
+where ID = @subscriptionID
+
+END
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[EnableSubscription] 
+  @subscriptionID int
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+
+declare @MaxID1 int
+declare @MaxID2 int
+declare @IsFirstActive bit
+
+select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
+from [{name}].[State]
+
+if (@MaxID1 is null)
+begin
+    exec [{name}].[RestoreState]
+
+    select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
+    from [{name}].[State]
+end
+
+
+if (@IsFirstActive = 1)
+    update [{name}].[Subscription]
+    set LastCompletedID = @MaxID1, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null, [Disabled] = 0
+    where ID = @subscriptionID and [Disabled] = 1
+else
+    update [{name}].[Subscription]
+    set LastCompletedID = @MaxID2, LastCompletedTime = sysutcdatetime(), LockTime = null, LockToken = null, [Disabled] = 0
+    where ID = @subscriptionID and [Disabled] = 1
+
+END
+
+
+GO
+
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[CreateSubscription]
+  @name nvarchar(255),
+  @maxIdleIntervalSeconds int = null,
+  @maxUncompletedMessages int = null,
+  @actionOnLimitExceeding int = null,
+  @subscriptionID int out
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+
+declare @MaxID1 int
+declare @MaxID2 int
+declare @IsFirstActive bit
+
+select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
+from [{name}].[State]
+
+if (@MaxID1 is null)
+begin
+    exec [{name}].[RestoreState]
+
+    select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
+    from [{name}].[State]
+end
+
+
+if (@IsFirstActive = 1)
+    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
+		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
+    values (@name, @MaxID1, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
+else
+    insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
+		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
+    values (@name, @MaxID2, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
+
+
+set @subscriptionID = scope_identity()
+
+END
+
 
 GO
 
