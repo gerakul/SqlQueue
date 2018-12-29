@@ -90,7 +90,28 @@ VALUES (1, @MinNum, @TresholdNum)
 
         internal static string GetDeletionScript(string name)
         {
-            return GetProceduresDeletionScript(name) + $@"
+            return GetProceduresDeletionScript(name) + GetObjectsDeletionScript(name) + $@"
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.SCHEMATA WHERE [SCHEMA_NAME] = '{name}')
+    DROP SCHEMA [{name}]
+";
+        }
+
+        internal static string GetCreationScript(string name)
+        {
+            return $@"
+
+CREATE SCHEMA [{name}]
+    AUTHORIZATION [dbo];
+
+GO
+
+" + GetObjectsCreationScript(name) + GetProceduresCreationScript(name);
+        }
+
+        internal static string GetObjectsDeletionScript(string name)
+        {
+            return $@"
 
 IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Messages0' AND TABLE_SCHEMA = '{name}')
     DROP TABLE [{name}].[Messages0]
@@ -120,20 +141,12 @@ IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.DOMAINS WHERE DOMAIN_NAME = 'M
     DROP TYPE [{name}].[MessageList]
 GO
 
-IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.SCHEMATA WHERE [SCHEMA_NAME] = '{name}')
-    DROP SCHEMA [{name}]
 ";
         }
 
-        internal static string GetCreationScript(string name)
+        internal static string GetObjectsCreationScript(string name)
         {
             return $@"
-
-CREATE SCHEMA [{name}]
-    AUTHORIZATION [dbo];
-
-
-GO
 
 CREATE TYPE [{name}].[MessageList] AS TABLE(
 	[ID] [int] NOT NULL,
@@ -231,7 +244,7 @@ WITH (DURABILITY = SCHEMA_ONLY, MEMORY_OPTIMIZED = ON);
 
 GO
 
-" + GetProceduresCreationScript(name);
+";
         }
 
         internal static string GetProceduresDeletionScript(string name)
@@ -1112,7 +1125,6 @@ else
     insert into [{name}].[Subscription] ([Name], [LastCompletedID], [LastCompletedTime], [Disabled],
 		[MaxIdleIntervalSeconds], [MaxUncompletedMessages], [ActionOnLimitExceeding])
     values (@name, @MaxID2, sysutcdatetime(), 0, @maxIdleIntervalSeconds, @maxUncompletedMessages, @actionOnLimitExceeding)
-
 
 set @subscriptionID = scope_identity()
 

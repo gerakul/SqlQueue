@@ -315,5 +315,276 @@ GO
                 Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
             }
         }
+
+        public void FullReset()
+        {
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                var stage = GetStage(conn);
+
+                if (stage != 2)
+                {
+                    // stage1
+                    Helper.ExecuteBatches(conn, GetMntStageCreationScript());
+                    Helper.ExecuteBatches(conn, QueueFactory.GetProceduresDeletionScript(queueName));
+                    Helper.ExecuteBatches(conn, GetTmpTablesDeletionScript());
+                    Helper.ExecuteBatches(conn, GetTmpTablesCreationScript());
+                    Helper.ExecuteBatches(conn, GetDataCopyToTmpScript());
+                    Helper.ExecuteBatches(conn, GetUpdateStageScript(2));
+                }
+
+                // stage2
+                Helper.ExecuteBatches(conn, QueueFactory.GetObjectsDeletionScript(queueName));
+                Helper.ExecuteBatches(conn, QueueFactory.GetObjectsCreationScript(queueName));
+                Helper.ExecuteBatches(conn, GetDataCopyFromTmpScript());
+                Helper.ExecuteBatches(conn, GetUpdateStageScript(3));
+
+                // stage3
+                Helper.ExecuteBatches(conn, GetTmpTablesDeletionScript());
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
+                Helper.ExecuteBatches(conn, GetMntStageDeletionScript());
+            }
+        }
+
+        private int GetStage(SqlConnection conn)
+        {
+            var script = $@"
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'MntStage' AND TABLE_SCHEMA = '{queueName}')
+    select ID from  [{queueName}].[MntStage];
+ELSE
+    select 0;
+";
+
+            SqlCommand cmd = new SqlCommand(script, conn);
+
+            using (var r = cmd.ExecuteReader())
+            {
+                r.Read();
+                return r.GetInt32(0);
+            }
+        }
+
+        private string GetMntStageDeletionScript()
+        {
+            return $@"
+DROP TABLE [{queueName}].[MntStage]
+
+GO
+";
+        }
+
+        private string GetMntStageCreationScript()
+        {
+            return $@"
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'MntStage' AND TABLE_SCHEMA = '{queueName}')
+    DROP TABLE [{queueName}].[MntStage]
+
+GO
+
+CREATE TABLE [{queueName}].[MntStage](
+	[ID] [int] NOT NULL,
+ CONSTRAINT [PK_MntStage] PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)
+) 
+
+GO
+
+insert into [{queueName}].[MntStage] ([ID])
+values (1)
+
+";
+        }
+
+        private string GetUpdateStageScript(int stage)
+        {
+            return $@"
+update [{queueName}].[MntStage]
+set ID = {stage}
+";
+        }
+
+        private string GetTmpTablesDeletionScript()
+        {
+            return $@"
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TmpSettings' AND TABLE_SCHEMA = '{queueName}')
+    DROP TABLE [{queueName}].[TmpSettings]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TmpSubscription' AND TABLE_SCHEMA = '{queueName}')
+    DROP TABLE [{queueName}].[TmpSubscription]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TmpMessages1' AND TABLE_SCHEMA = '{queueName}')
+    DROP TABLE [{queueName}].[TmpMessages1]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TmpMessages2' AND TABLE_SCHEMA = '{queueName}')
+    DROP TABLE [{queueName}].[TmpMessages2]
+GO
+
+";
+        }
+
+        private string GetTmpTablesCreationScript()
+        {
+            return $@"
+
+CREATE TABLE [{queueName}].[TmpSettings](
+	[ID] [bigint] NOT NULL,
+	[MinNum] [int] NOT NULL,
+	[TresholdNum] [int] NOT NULL,
+ CONSTRAINT [PK_TmpSettings] PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)
+) 
+
+GO
+
+
+CREATE TABLE [{queueName}].[TmpSubscription](
+	[ID] [int] NOT NULL,
+	[Name] [nvarchar](255) NOT NULL,
+	[LastCompletedID] [bigint] NOT NULL,
+	[LastCompletedTime] [datetime2](7) NOT NULL,
+	[LockTime] [datetime2](7) NULL,
+	[LockToken] [uniqueidentifier] NULL,
+	[Disabled] [bit] NOT NULL,
+	[MaxIdleIntervalSeconds] [int] NULL,
+	[MaxUncompletedMessages] [int] NULL,
+	[ActionOnLimitExceeding] [int] NULL,
+ CONSTRAINT [PK_TmpSubscription] PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)
+)
+
+GO
+
+
+CREATE TABLE [{queueName}].[TmpMessages1](
+	[ID] [bigint] NOT NULL,
+	[Created] [datetime2](7) NOT NULL,
+	[Body] [varbinary](8000) NOT NULL,
+ CONSTRAINT [PK_TmpMessages1] PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)
+)
+
+GO
+
+
+CREATE TABLE [{queueName}].[TmpMessages2](
+	[ID] [bigint] NOT NULL,
+	[Created] [datetime2](7) NOT NULL,
+	[Body] [varbinary](8000) NOT NULL,
+ CONSTRAINT [PK_TmpMessages2] PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)
+)
+
+GO
+
+";
+        }
+
+        private string GetDataCopyToTmpScript()
+        {
+            return $@"
+
+insert into [{queueName}].[TmpSettings] ([ID], [MinNum], [TresholdNum])
+select [ID], [MinNum], [TresholdNum]
+from [{queueName}].[Settings]
+
+insert into [{queueName}].[TmpSubscription] ([ID]
+      ,[Name]
+      ,[LastCompletedID]
+      ,[LastCompletedTime]
+      ,[LockTime]
+      ,[LockToken]
+      ,[Disabled]
+      ,[MaxIdleIntervalSeconds]
+      ,[MaxUncompletedMessages]
+      ,[ActionOnLimitExceeding])
+select [ID]
+      ,[Name]
+      ,[LastCompletedID]
+      ,[LastCompletedTime]
+      ,[LockTime]
+      ,[LockToken]
+      ,[Disabled]
+      ,[MaxIdleIntervalSeconds]
+      ,[MaxUncompletedMessages]
+      ,[ActionOnLimitExceeding]
+from [{queueName}].[Subscription]
+
+
+insert into [{queueName}].[TmpMessages1] ([ID], [Created], [Body])
+select [ID], [Created], [Body]
+from [{queueName}].[Messages1]
+
+insert into [{queueName}].[TmpMessages2] ([ID], [Created], [Body])
+select [ID], [Created], [Body]
+from [{queueName}].[Messages2]
+
+GO
+
+";
+        }
+
+        private string GetDataCopyFromTmpScript()
+        {
+            return $@"
+
+insert into [{queueName}].[Settings] ([ID], [MinNum], [TresholdNum])
+select [ID], [MinNum], [TresholdNum]
+from [{queueName}].[TmpSettings]
+
+set identity_insert [{queueName}].[Subscription] on;
+
+insert into [{queueName}].[Subscription] ([ID]
+      ,[Name]
+      ,[LastCompletedID]
+      ,[LastCompletedTime]
+      ,[LockTime]
+      ,[LockToken]
+      ,[Disabled]
+      ,[MaxIdleIntervalSeconds]
+      ,[MaxUncompletedMessages]
+      ,[ActionOnLimitExceeding])
+select [ID]
+      ,[Name]
+      ,[LastCompletedID]
+      ,[LastCompletedTime]
+      ,[LockTime]
+      ,[LockToken]
+      ,[Disabled]
+      ,[MaxIdleIntervalSeconds]
+      ,[MaxUncompletedMessages]
+      ,[ActionOnLimitExceeding]
+from [{queueName}].[TmpSubscription]
+
+set identity_insert [{queueName}].[Subscription] off;
+
+insert into [{queueName}].[Messages1] ([ID], [Created], [Body])
+select [ID], [Created], [Body]
+from [{queueName}].[TmpMessages1]
+
+insert into [{queueName}].[Messages2] ([ID], [Created], [Body])
+select [ID], [Created], [Body]
+from [{queueName}].[TmpMessages2]
+
+GO
+
+";
+        }
     }
 }
