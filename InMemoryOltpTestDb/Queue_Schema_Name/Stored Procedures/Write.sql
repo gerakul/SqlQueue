@@ -1,7 +1,4 @@
 ﻿
-
-
-
 CREATE PROCEDURE [Queue_Schema_Name].[Write] 
   @body varbinary(8000),
   @id bigint out
@@ -62,7 +59,7 @@ begin
     set @id = @MaxID1 + 1
 
     update [Queue_Schema_Name].[State]
-    set Modified = @date, MinID2 = @id, MaxID2 = @id, Num2 = 1, IsFirstActive = 0
+    set Modified = @date, LastWrite = @date, MinID2 = @id, MaxID2 = @id, Num2 = 1, IsFirstActive = 0
 
     set @stateUpdated = 1
 end
@@ -72,7 +69,7 @@ begin
     set @id = @MaxID2 + 1
 
     update [Queue_Schema_Name].[State]
-    set Modified = @date, MinID1 = @id, MaxID1 = @id, Num1 = 1, IsFirstActive = 1
+    set Modified = @date, LastWrite = @date, MinID1 = @id, MaxID1 = @id, Num1 = 1, IsFirstActive = 1
 
     set @stateUpdated = 1
 end
@@ -85,7 +82,7 @@ begin
         set @id = @MaxID1 + 1
 
         update [Queue_Schema_Name].[State]
-	    set Modified = @date, MaxID1 = @id, Num1 = @Num1 + 1
+	    set Modified = @date, LastWrite = @date, MaxID1 = @id, Num1 = @Num1 + 1
     end
 
     insert into [Queue_Schema_Name].Messages1 (ID, Created, Body)
@@ -98,7 +95,7 @@ begin
         set @id = @MaxID2 + 1
 
         update [Queue_Schema_Name].[State]
-        set Modified = @date, MaxID2 = @id, Num2 = @Num2 + 1
+        set Modified = @date, LastWrite = @date, MaxID2 = @id, Num2 = @Num2 + 1
     end
 
     insert into [Queue_Schema_Name].Messages2 (ID, Created, Body)

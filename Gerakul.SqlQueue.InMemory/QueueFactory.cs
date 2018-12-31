@@ -141,6 +141,14 @@ IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.DOMAINS WHERE DOMAIN_NAME = 'M
     DROP TYPE [{name}].[MessageList]
 GO
 
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.DOMAINS WHERE DOMAIN_NAME = 'SubscriptionCandidatesToAction' AND DOMAIN_SCHEMA = '{name}' AND DATA_TYPE = 'table type')
+    DROP TYPE [{name}].[SubscriptionCandidatesToAction]
+GO
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.DOMAINS WHERE DOMAIN_NAME = 'SubscriptionsToAction' AND DOMAIN_SCHEMA = '{name}' AND DATA_TYPE = 'table type')
+    DROP TYPE [{name}].[SubscriptionsToAction]
+GO
+
 ";
         }
 
@@ -155,6 +163,35 @@ CREATE TYPE [{name}].[MessageList] AS TABLE(
 (
 	[ID]
 )WITH ( BUCKET_COUNT = 1024)
+)
+WITH ( MEMORY_OPTIMIZED = ON )
+
+GO
+
+
+CREATE TYPE [{name}].[SubscriptionCandidatesToAction] AS TABLE(
+	[ID] [int] NOT NULL,
+	[NextToCompletedID] [bigint] NOT NULL,
+	[MaxIdleIntervalSeconds] [int] NOT NULL,
+	[ActionOnLimitExceeding] [int] NOT NULL,
+	 PRIMARY KEY NONCLUSTERED HASH 
+(
+	[ID]
+)WITH ( BUCKET_COUNT = 256)
+)
+WITH ( MEMORY_OPTIMIZED = ON )
+
+GO
+
+
+CREATE TYPE [{name}].[SubscriptionsToAction] AS TABLE(
+	[RowID] [int] IDENTITY(1,1) NOT NULL,
+	[ID] [int] NOT NULL,
+	[ActionOnLimitExceeding] [int] NOT NULL,
+	 PRIMARY KEY NONCLUSTERED HASH 
+(
+	[RowID]
+)WITH ( BUCKET_COUNT = 256)
 )
 WITH ( MEMORY_OPTIMIZED = ON )
 
@@ -183,6 +220,7 @@ GO
 CREATE TABLE [{name}].[State] (
     [ID]            BIGINT        NOT NULL,
     [Modified]      DATETIME2 (7) NOT NULL,
+	[LastWrite]     DATETIME2 (7) NOT NULL,
     [MinID1]        BIGINT        NOT NULL,
     [MaxID1]        BIGINT        NOT NULL,
     [Num1]          INT           NOT NULL,
@@ -334,20 +372,25 @@ CREATE PROCEDURE [{name}].[RestoreState]
 declare @MinID1 bigint
 declare @MaxID1 bigint
 declare @Num1 int
+declare @LastWrite1 datetime2(7)
 declare @NeedClean1 bit = 0
 declare @MinID2 bigint
 declare @MaxID2 bigint
 declare @Num2 int
+declare @LastWrite2 datetime2(7)
 declare @NeedClean2 bit = 0
 declare @IsFirstActive bit
+declare @LastWrite datetime2(7)
 
 declare @MinNum int
 declare @TresholdNum int
 
+declare @time datetime2(7) = sysutcdatetime()
+
 select top 1 @MinNum = MinNum, @TresholdNum = TresholdNum
 from [{name}].[Settings]
 
-select @MinID1 = min(ID), @MaxID1 = max(ID), @Num1 = count(*)
+select @MinID1 = min(ID), @MaxID1 = max(ID), @Num1 = count(*), @LastWrite1 = max(Created)
 from [{name}].Messages1
 
 if (@Num1 = 0)
@@ -356,7 +399,7 @@ begin
     set @MaxID1 = 0
 end
 
-select @MinID2 = min(ID), @MaxID2 = max(ID), @Num2 = count(*)
+select @MinID2 = min(ID), @MaxID2 = max(ID), @Num2 = count(*), @LastWrite2 = max(Created)
 from [{name}].Messages2
 
 if (@Num2 = 0)
@@ -366,9 +409,18 @@ begin
 end
 
 if (@MaxID1 >= @MaxID2)
+begin
     set @IsFirstActive = 1
+	set @LastWrite = @LastWrite1
+end
 else 
+begin
     set @IsFirstActive = 0
+	set @LastWrite = @LastWrite2
+end
+
+if (@LastWrite is null)
+	set @LastWrite = @time
 
 -- если можем очистить другую таблицу, то помечаем для очистки
 if (@IsFirstActive = 1 and @Num1 >= @MinNum and @MaxID2 > 0)
@@ -378,9 +430,9 @@ else if (@IsFirstActive = 0 and @Num2 >= @MinNum and @MaxID1 > 0)
 
 delete from [{name}].[State]
 
-insert into [{name}].[State] (ID, Modified, MinID1, MaxID1, Num1, NeedClean1, MinID2, MaxID2,
+insert into [{name}].[State] (ID, Modified, LastWrite, MinID1, MaxID1, Num1, NeedClean1, MinID2, MaxID2,
     Num2, NeedClean2, IsFirstActive, MinNum, TresholdNum)
-values (1, sysutcdatetime(), @MinID1, @MaxID1, @Num1, @NeedClean1, @MinID2, @MaxID2,
+values (1, @time, @LastWrite, @MinID1, @MaxID1, @Num1, @NeedClean1, @MinID2, @MaxID2,
     @Num2, @NeedClean2, @IsFirstActive, @MinNum, @TresholdNum)
 
 END
@@ -678,14 +730,14 @@ GO
   BEGIN ATOMIC 
   WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
 
-declare @Modified datetime2(7)
+declare @LastWrite datetime2(7)
 declare @IsFirstActive bit
 declare @MaxID1 bigint
 declare @NeedClean1 bit
 declare @MaxID2 bigint
 declare @NeedClean2 bit
 
-select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive,
+select top 1 @LastWrite = LastWrite, @IsFirstActive = IsFirstActive,
 	@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
 from [{name}].[State]
 
@@ -693,7 +745,7 @@ if (@MaxID1 is null)
 begin
     exec [{name}].[RestoreState]
 
-    select top 1 @Modified = Modified, @IsFirstActive = IsFirstActive,
+    select top 1 @LastWrite = LastWrite, @IsFirstActive = IsFirstActive,
 		@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
     from [{name}].[State]
 end
@@ -705,16 +757,68 @@ if (@IsFirstActive = 1)
 else 
 	set @maxID = @MaxID2
 
-delete from [{name}].Subscription
+delete from [{name}].[Subscription]
 where ActionOnLimitExceeding = 1 
-	and ((@maxID - LastCompletedID) > MaxUncompletedMessages 
-		or datediff(second, LastCompletedTime, @Modified) > MaxIdleIntervalSeconds)
+	and (@maxID - LastCompletedID) > MaxUncompletedMessages 
 
-update [{name}].Subscription
+update [{name}].[Subscription]
 set LockTime = null, LockToken = null, [Disabled] = 1
 where ActionOnLimitExceeding = 2 and [Disabled] = 0 
-	and ((@maxID - LastCompletedID) > MaxUncompletedMessages 
-		or datediff(second, LastCompletedTime, @Modified) > MaxIdleIntervalSeconds)
+	and (@maxID - LastCompletedID) > MaxUncompletedMessages 
+
+--- actions triggered by MaxIdleIntervalSeconds ---<<<
+declare @candidates [{name}].[SubscriptionCandidatesToAction];
+
+insert into @candidates (ID, NextToCompletedID, MaxIdleIntervalSeconds, ActionOnLimitExceeding)
+select ID, LastCompletedID + 1 as NextToCompletedID, MaxIdleIntervalSeconds, ActionOnLimitExceeding
+from [{name}].[Subscription]
+where (ActionOnLimitExceeding = 1 or (ActionOnLimitExceeding = 2 and [Disabled] = 0))
+	and datediff(second, LastCompletedTime, @LastWrite) > MaxIdleIntervalSeconds
+	and LastCompletedID < @maxID
+
+declare @candidatesExist bit = (select top 1 1 from @candidates);
+
+if (@candidatesExist = 1)
+begin
+	-- rarely executed code
+	declare @actionNeeded [{name}].[SubscriptionsToAction];
+
+	insert into @actionNeeded (ID, ActionOnLimitExceeding)
+	select C.ID, C.ActionOnLimitExceeding 
+	from @candidates C
+		join [{name}].[Messages1] M on C.NextToCompletedID = M.ID
+	where datediff(second, M.Created, @LastWrite) > C.MaxIdleIntervalSeconds
+
+	insert into @actionNeeded (ID, ActionOnLimitExceeding)
+	select C.ID, C.ActionOnLimitExceeding 
+	from @candidates C
+		join [{name}].[Messages2] M on C.NextToCompletedID = M.ID
+	where datediff(second, M.Created, @LastWrite) > C.MaxIdleIntervalSeconds
+
+	declare @i int = 1
+	declare @maxRowID int = SCOPE_IDENTITY()
+	declare @SubIDToAction int
+	declare @ActionToTake int
+
+	while (@i <= @maxRowID)
+	begin
+		select @SubIDToAction = ID, @ActionToTake = ActionOnLimitExceeding
+		from @actionNeeded
+		where RowID = @i
+
+		if (@ActionToTake = 1)
+			delete from [{name}].[Subscription] 
+			where ID = @SubIDToAction
+		else if (@ActionToTake = 2)
+			update [{name}].[Subscription]
+			set LockTime = null, LockToken = null, [Disabled] = 1
+			where ID = @SubIDToAction
+
+		set @i += 1
+	end
+
+end
+--->>>
 
 if (@NeedClean1 = 1)
 begin
@@ -815,7 +919,7 @@ begin
     set @id = @MaxID1 + 1
 
     update [{name}].[State]
-    set Modified = @date, MinID2 = @id, MaxID2 = @id, Num2 = 1, IsFirstActive = 0
+    set Modified = @date, LastWrite = @date, MinID2 = @id, MaxID2 = @id, Num2 = 1, IsFirstActive = 0
 
     set @stateUpdated = 1
 end
@@ -825,7 +929,7 @@ begin
     set @id = @MaxID2 + 1
 
     update [{name}].[State]
-    set Modified = @date, MinID1 = @id, MaxID1 = @id, Num1 = 1, IsFirstActive = 1
+    set Modified = @date, LastWrite = @date, MinID1 = @id, MaxID1 = @id, Num1 = 1, IsFirstActive = 1
 
     set @stateUpdated = 1
 end
@@ -838,7 +942,7 @@ begin
         set @id = @MaxID1 + 1
 
         update [{name}].[State]
-	    set Modified = @date, MaxID1 = @id, Num1 = @Num1 + 1
+	    set Modified = @date, LastWrite = @date, MaxID1 = @id, Num1 = @Num1 + 1
     end
 
     insert into [{name}].Messages1 (ID, Created, Body)
@@ -851,7 +955,7 @@ begin
         set @id = @MaxID2 + 1
 
         update [{name}].[State]
-        set Modified = @date, MaxID2 = @id, Num2 = @Num2 + 1
+        set Modified = @date, LastWrite = @date, MaxID2 = @id, Num2 = @Num2 + 1
     end
 
     insert into [{name}].Messages2 (ID, Created, Body)
@@ -930,7 +1034,7 @@ begin
     set @lastID = @MaxID1
 
     update [{name}].[State]
-    set Modified = @date, MinID2 = @MaxID1 + 1, MaxID2 = @MaxID1 + @cnt, Num2 = @cnt, IsFirstActive = 0
+    set Modified = @date, LastWrite = @date, MinID2 = @MaxID1 + 1, MaxID2 = @MaxID1 + @cnt, Num2 = @cnt, IsFirstActive = 0
 
     set @stateUpdated = 1
 end
@@ -940,7 +1044,7 @@ begin
     set @lastID = @MaxID2
 
     update [{name}].[State]
-    set Modified = @date, MinID1 = @MaxID2 + 1, MaxID1 = @MaxID2 + @cnt, Num1 = @cnt, IsFirstActive = 1
+    set Modified = @date, LastWrite = @date, MinID1 = @MaxID2 + 1, MaxID1 = @MaxID2 + @cnt, Num1 = @cnt, IsFirstActive = 1
 
     set @stateUpdated = 1
 end
@@ -953,7 +1057,7 @@ begin
         set @lastID = @MaxID1
 
         update [{name}].[State]
-	    set Modified = @date, MaxID1 = @MaxID1 + @cnt, Num1 = @Num1 + @cnt
+	    set Modified = @date, LastWrite = @date, MaxID1 = @MaxID1 + @cnt, Num1 = @Num1 + @cnt
     end
 
     insert into [{name}].Messages1 (ID, Created, Body)
@@ -968,7 +1072,7 @@ begin
         set @lastID = @MaxID2
 
         update [{name}].[State]
-        set Modified = @date, MaxID2 = @MaxID2 + @cnt, Num2 = @Num2 + @cnt
+        set Modified = @date, LastWrite = @date, MaxID2 = @MaxID2 + @cnt, Num2 = @Num2 + @cnt
     end
 
     insert into [{name}].Messages2 (ID, Created, Body)

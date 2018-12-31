@@ -269,6 +269,12 @@ GO
             }
         }
 
+        public static void UpdateFrom_1_3_0_To_Latest(string connectionString, string queueName)
+        {
+            var m = new Maintenance(connectionString, queueName);
+            m.FullReset();
+        }
+
         public Maintenance(string connectionString, string queueName)
         {
             this.connectionString = connectionString;

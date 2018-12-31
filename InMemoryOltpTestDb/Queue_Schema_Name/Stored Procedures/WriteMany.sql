@@ -66,7 +66,7 @@ begin
     set @lastID = @MaxID1
 
     update [Queue_Schema_Name].[State]
-    set Modified = @date, MinID2 = @MaxID1 + 1, MaxID2 = @MaxID1 + @cnt, Num2 = @cnt, IsFirstActive = 0
+    set Modified = @date, LastWrite = @date, MinID2 = @MaxID1 + 1, MaxID2 = @MaxID1 + @cnt, Num2 = @cnt, IsFirstActive = 0
 
     set @stateUpdated = 1
 end
@@ -76,7 +76,7 @@ begin
     set @lastID = @MaxID2
 
     update [Queue_Schema_Name].[State]
-    set Modified = @date, MinID1 = @MaxID2 + 1, MaxID1 = @MaxID2 + @cnt, Num1 = @cnt, IsFirstActive = 1
+    set Modified = @date, LastWrite = @date, MinID1 = @MaxID2 + 1, MaxID1 = @MaxID2 + @cnt, Num1 = @cnt, IsFirstActive = 1
 
     set @stateUpdated = 1
 end
@@ -89,7 +89,7 @@ begin
         set @lastID = @MaxID1
 
         update [Queue_Schema_Name].[State]
-	    set Modified = @date, MaxID1 = @MaxID1 + @cnt, Num1 = @Num1 + @cnt
+	    set Modified = @date, LastWrite = @date, MaxID1 = @MaxID1 + @cnt, Num1 = @Num1 + @cnt
     end
 
     insert into [Queue_Schema_Name].Messages1 (ID, Created, Body)
@@ -104,7 +104,7 @@ begin
         set @lastID = @MaxID2
 
         update [Queue_Schema_Name].[State]
-        set Modified = @date, MaxID2 = @MaxID2 + @cnt, Num2 = @Num2 + @cnt
+        set Modified = @date, LastWrite = @date, MaxID2 = @MaxID2 + @cnt, Num2 = @Num2 + @cnt
     end
 
     insert into [Queue_Schema_Name].Messages2 (ID, Created, Body)

@@ -21,7 +21,7 @@ Note! Database must be configured for memory optimized tables before queue creat
         // creating subscription with settings
         client.CreateSubscription("ProtectedSubscription", new SubscriptionSettings()
         {
-            // take action if difference between last write and last complete exceeded MaxIdleIntervalSeconds
+            // take action if a time difference between first and last uncompleted messages in queue exceeded MaxIdleIntervalSeconds
             MaxIdleIntervalSeconds = 3600,
             // take action if number of uncompleted messages exceeded MaxUncompletedMessages
             MaxUncompletedMessages = 200000,
@@ -91,5 +91,5 @@ Note! Database must be configured for memory optimized tables before queue creat
         // stop reading
         await autoReader.Stop();
 
-		autoReader.Close();
+        autoReader.Close();
   ```     
