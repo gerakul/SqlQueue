@@ -275,6 +275,12 @@ GO
             m.FullReset();
         }
 
+        public static void UpdateFrom_1_4_0_To_Latest(string connectionString, string queueName)
+        {
+            var m = new Maintenance(connectionString, queueName);
+            m.AlterMainProcedures();
+        }
+
         public Maintenance(string connectionString, string queueName)
         {
             this.connectionString = connectionString;

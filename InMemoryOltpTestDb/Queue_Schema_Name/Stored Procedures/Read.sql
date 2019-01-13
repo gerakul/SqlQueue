@@ -1,8 +1,4 @@
 ﻿
-
-
-
-
 CREATE PROCEDURE [Queue_Schema_Name].[Read] 
   @subscriptionID int,
   @num int,
@@ -20,14 +16,24 @@ declare @LastCompletedID bigint
 declare @LockTime datetime2(7)
 declare @Disabled bit
 
+declare @descriptionString nvarchar(1024) = 'Queue: Queue_Schema_Name, SubscriptionID: ' + cast(@subscriptionID as varchar(10))
+declare @errStr nvarchar(2048)
+
 select top 1 @LastCompletedID = LastCompletedID, @LockTime = LockTime, @Disabled = [Disabled]
 from [Queue_Schema_Name].[Subscription]
 where ID = @subscriptionID
 
+if (@Disabled is null)
+begin
+	set @errStr = 'Subscription does not exist. ' + @descriptionString;
+	throw 50004, @errStr, 1;
+end
+
 if (@Disabled = 1)
 begin
     set @newLockToken = null;
-	throw 50002, 'Subscription is disabled', 1;
+	set @errStr = 'Subscription is disabled. ' + @descriptionString;
+	throw 50002, @errStr, 1;
 end
 
 -- проверяем заблокирована ли подписка
@@ -37,7 +43,8 @@ begin
     if (DATEDIFF(second, @LockTime, @time) <  @checkLockSeconds)
     begin
         set @newLockToken = null;
-	    throw 50003, 'Subscription is locked', 1;
+	    set @errStr = 'Subscription is locked. ' + @descriptionString;
+	    throw 50003, @errStr, 1;
     end
 end
 
