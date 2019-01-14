@@ -9,6 +9,8 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public sealed class QueueFactory
     {
+        public const string Version = "1.4.1";
+
         private string connectionString { get; }
 
         public QueueFactory(string connectionString)
@@ -80,10 +82,14 @@ namespace Gerakul.SqlQueue.InMemory
             var cmd = new SqlCommand($@"
 INSERT INTO [{name}].[Settings] ([ID], [MinNum], [TresholdNum])
 VALUES (1, @MinNum, @TresholdNum)
+
+INSERT INTO [{name}].[Global] ([ID], [Version])
+VALUES (1, @Version)
 ", conn);
 
             cmd.Parameters.AddWithValue("MinNum", minMessNum);
             cmd.Parameters.AddWithValue("TresholdNum", tresholdMessNumBeforeClean);
+            cmd.Parameters.AddWithValue("Version", Version);
 
             return cmd;
         }
@@ -112,6 +118,10 @@ GO
         internal static string GetObjectsDeletionScript(string name)
         {
             return $@"
+
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Global' AND TABLE_SCHEMA = '{name}')
+    DROP TABLE [{name}].[Global]
+GO
 
 IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Messages0' AND TABLE_SCHEMA = '{name}')
     DROP TABLE [{name}].[Messages0]
@@ -279,6 +289,15 @@ CREATE TABLE [{name}].[Messages0] (
     PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
 )
 WITH (DURABILITY = SCHEMA_ONLY, MEMORY_OPTIMIZED = ON);
+
+GO
+
+CREATE TABLE [{name}].[Global] (
+    [ID]      BIGINT        NOT NULL,
+    [Version] NVARCHAR (32) NOT NULL,
+    PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
+)
+WITH (MEMORY_OPTIMIZED = ON);
 
 GO
 

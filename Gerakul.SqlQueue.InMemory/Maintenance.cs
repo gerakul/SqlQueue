@@ -277,6 +277,30 @@ GO
 
         public static void UpdateFrom_1_4_0_To_Latest(string connectionString, string queueName)
         {
+            var createGlobalScript = $@"
+
+CREATE TABLE [{queueName}].[Global] (
+    [ID]      BIGINT        NOT NULL,
+    [Version] NVARCHAR (32) NOT NULL,
+    PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
+)
+WITH (MEMORY_OPTIMIZED = ON);
+
+GO
+
+INSERT INTO [{queueName}].[Global] ([ID], [Version])
+VALUES (1, '{QueueFactory.Version}')
+
+GO
+";
+
+            using (var conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                Helper.ExecuteBatches(conn, createGlobalScript);
+            }
+
             var m = new Maintenance(connectionString, queueName);
             m.AlterMainProcedures();
         }
@@ -355,9 +379,33 @@ GO
 
                 // stage3
                 Helper.ExecuteBatches(conn, GetTmpTablesDeletionScript());
+                InsertGlobal(conn);
                 Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
                 Helper.ExecuteBatches(conn, GetMntStageDeletionScript());
             }
+        }
+
+        private void InsertGlobal(SqlConnection conn)
+        {
+            var cmd = new SqlCommand($@"
+INSERT INTO [{queueName}].[Global] ([ID], [Version])
+VALUES (1, @Version)
+", conn);
+
+            cmd.Parameters.AddWithValue("Version", QueueFactory.Version);
+            cmd.ExecuteNonQuery();
+        }
+
+        private void UpdateGlobal(SqlConnection conn)
+        {
+            var cmd = new SqlCommand($@"
+UPDATE [{queueName}].[Global] 
+SET Version = @Version
+WHERE ID = 1
+", conn);
+
+            cmd.Parameters.AddWithValue("Version", QueueFactory.Version);
+            cmd.ExecuteNonQuery();
         }
 
         private int GetStage(SqlConnection conn)

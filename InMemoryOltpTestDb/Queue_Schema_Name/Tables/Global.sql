@@ -1,0 +1,7 @@
+﻿CREATE TABLE [Queue_Schema_Name].[Global] (
+    [ID]      BIGINT        NOT NULL,
+    [Version] NVARCHAR (32) NOT NULL,
+    PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
+)
+WITH (MEMORY_OPTIMIZED = ON);
+

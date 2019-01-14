@@ -94,5 +94,6 @@
     <Build Include="Queue_Schema_Name\Stored Procedures\GetAllSubscriptionsInfo.sql" />
     <Build Include="Queue_Schema_Name\User Defined Types\SubscriptionsToAction.sql" />
     <Build Include="Queue_Schema_Name\User Defined Types\SubscriptionCandidatesToAction.sql" />
+    <Build Include="Queue_Schema_Name\Tables\Global.sql" />
   </ItemGroup>
 </Project>
