@@ -562,7 +562,7 @@ GO
 
 insert into [{queueName}].[TmpSettings] ([ID], [MinNum], [TresholdNum])
 select [ID], [MinNum], [TresholdNum]
-from [{queueName}].[Settings]
+from [{queueName}].[Settings] WITH (SNAPSHOT)
 
 insert into [{queueName}].[TmpSubscription] ([ID]
       ,[Name]
@@ -584,16 +584,17 @@ select [ID]
       ,[MaxIdleIntervalSeconds]
       ,[MaxUncompletedMessages]
       ,[ActionOnLimitExceeding]
-from [{queueName}].[Subscription]
+from [{queueName}].[Subscription] WITH (SNAPSHOT)
 
 
 insert into [{queueName}].[TmpMessages1] ([ID], [Created], [Body])
 select [ID], [Created], [Body]
-from [{queueName}].[Messages1]
+from [{queueName}].[Messages1] WITH (SNAPSHOT)
 
 insert into [{queueName}].[TmpMessages2] ([ID], [Created], [Body])
 select [ID], [Created], [Body]
-from [{queueName}].[Messages2]
+from [{queueName}].[Messages2] WITH (SNAPSHOT)
+
 
 GO
 

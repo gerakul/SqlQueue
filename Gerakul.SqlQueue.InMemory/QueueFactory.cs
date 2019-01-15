@@ -9,7 +9,7 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public sealed class QueueFactory
     {
-        public const string Version = "1.4.1";
+        public const string Version = "1.4.2";
 
         private string connectionString { get; }
 
