@@ -59,8 +59,10 @@ namespace Gerakul.SqlQueue.InMemory
                 cmd.CommandText = @"select top 1 1
                     from sys.tables t
                         join sys.schemas s on t.schema_id = s.schema_id
-                            and s.name = @name
-                    where t.name = 'Subscription'";
+		                    and s.name = @name
+                    where t.name in ('Global', 'Messages0', 'Messages1', 'Messages2', 'Settings', 'State', 'Subscription')
+                    group by s.name
+                    having count(*) = 7";
                 cmd.Parameters.AddWithValue("@name", name);
 
                 using (var r = cmd.ExecuteReader())
