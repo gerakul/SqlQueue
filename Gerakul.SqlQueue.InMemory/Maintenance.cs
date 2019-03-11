@@ -272,7 +272,7 @@ GO
         public static void UpdateFrom_1_3_0_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);
-            m.FullReset();
+            m.FullReset(false);
         }
 
         public static void UpdateFrom_1_4_0_To_Latest(string connectionString, string queueName)
@@ -352,7 +352,7 @@ GO
             }
         }
 
-        public void FullReset()
+        public void FullReset(bool schemaOnlyDurability)
         {
             using (var conn = new SqlConnection(connectionString))
             {
@@ -373,7 +373,7 @@ GO
 
                 // stage2
                 Helper.ExecuteBatches(conn, QueueFactory.GetObjectsDeletionScript(queueName));
-                Helper.ExecuteBatches(conn, QueueFactory.GetObjectsCreationScript(queueName));
+                Helper.ExecuteBatches(conn, QueueFactory.GetObjectsCreationScript(queueName, schemaOnlyDurability));
                 Helper.ExecuteBatches(conn, GetDataCopyFromTmpScript());
                 Helper.ExecuteBatches(conn, GetUpdateStageScript(3));
 

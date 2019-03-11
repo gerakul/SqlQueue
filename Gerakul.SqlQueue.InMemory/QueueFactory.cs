@@ -18,7 +18,8 @@ namespace Gerakul.SqlQueue.InMemory
             this.connectionString = connectionString;
         }
 
-        public QueueClient CreateQueue(string name, int minMessNum = 10000, int tresholdMessNumBeforeClean = 100000)
+        public QueueClient CreateQueue(string name, int minMessNum = 10000, int tresholdMessNumBeforeClean = 100000,
+            bool schemaOnlyDurability = false)
         {
             using (var conn = new SqlConnection(connectionString))
             {
@@ -28,7 +29,7 @@ namespace Gerakul.SqlQueue.InMemory
                 preparationCmd.CommandText = "ALTER DATABASE CURRENT SET DELAYED_DURABILITY = DISABLED";
                 preparationCmd.ExecuteNonQuery();
 
-                Helper.ExecuteBatches(conn, GetCreationScript(name));
+                Helper.ExecuteBatches(conn, GetCreationScript(name, schemaOnlyDurability));
 
                 GetPostCommand(conn, name, minMessNum, tresholdMessNumBeforeClean).ExecuteNonQuery();
 
@@ -105,7 +106,7 @@ IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.SCHEMATA WHERE [SCHEMA_NAME] =
 ";
         }
 
-        internal static string GetCreationScript(string name)
+        internal static string GetCreationScript(string name, bool schemaOnlyDurability)
         {
             return $@"
 
@@ -114,7 +115,7 @@ CREATE SCHEMA [{name}]
 
 GO
 
-" + GetObjectsCreationScript(name) + GetProceduresCreationScript(name);
+" + GetObjectsCreationScript(name, schemaOnlyDurability) + GetProceduresCreationScript(name);
         }
 
         internal static string GetObjectsDeletionScript(string name)
@@ -164,7 +165,7 @@ GO
 ";
         }
 
-        internal static string GetObjectsCreationScript(string name)
+        internal static string GetObjectsCreationScript(string name, bool schemaOnlyDurability)
         {
             return $@"
 
@@ -268,7 +269,7 @@ CREATE TABLE [{name}].[Messages2] (
     [Body]    VARBINARY (8000) NOT NULL,
     PRIMARY KEY NONCLUSTERED ([ID] ASC) 
 )
-WITH (MEMORY_OPTIMIZED = ON);
+WITH ({(schemaOnlyDurability ? "DURABILITY = SCHEMA_ONLY, " : "")}MEMORY_OPTIMIZED = ON);
 
 
 GO
@@ -279,7 +280,7 @@ CREATE TABLE [{name}].[Messages1] (
     [Body]    VARBINARY (8000) NOT NULL,
     PRIMARY KEY NONCLUSTERED ([ID] ASC) 
 )
-WITH (MEMORY_OPTIMIZED = ON);
+WITH ({(schemaOnlyDurability ? "DURABILITY = SCHEMA_ONLY, " : "")}MEMORY_OPTIMIZED = ON);
 
 
 GO
