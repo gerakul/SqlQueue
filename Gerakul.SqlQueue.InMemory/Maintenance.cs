@@ -305,6 +305,24 @@ GO
             m.AlterMainProcedures();
         }
 
+        public static void UpdateFrom_1_4_1_To_Latest(string connectionString, string queueName)
+        {
+            var m = new Maintenance(connectionString, queueName);
+            m.AlterMainProcedures();
+        }
+
+        public static void UpdateFrom_1_4_2_To_Latest(string connectionString, string queueName)
+        {
+            var m = new Maintenance(connectionString, queueName);
+            m.AlterMainProcedures();
+        }
+
+        public static void UpdateFrom_1_4_3_To_Latest(string connectionString, string queueName)
+        {
+            var m = new Maintenance(connectionString, queueName);
+            m.AlterMainProcedures();
+        }
+
         public static void UpdateFrom_1_5_0_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);

@@ -229,9 +229,9 @@ namespace Gerakul.SqlQueue.InMemory
             return subID;
         }
 
-        public Writer CreateWriter(int cleanMinIntervalSeconds = 10)
+        public Writer CreateWriter(int cleanMinIntervalSeconds = 10, int numberOfRetryWhenConflict = 10)
         {
-            return new Writer(this, cleanMinIntervalSeconds);
+            return new Writer(this, cleanMinIntervalSeconds, numberOfRetryWhenConflict);
         }
 
         public Reader CreateReader(string subscription, int defaultCheckLockSeconds = 30)

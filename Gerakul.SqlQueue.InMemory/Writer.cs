@@ -18,6 +18,7 @@ namespace Gerakul.SqlQueue.InMemory
         private SqlCommand writeManyCommand;
         private bool needReconnect = true;
         private int cleanMinIntervalSeconds;
+        private int numberOfRetryWhenConflict;
         private DateTime lastCleanup;
         private DateTime lastWrite;
         private object lockObj = new object();
@@ -31,10 +32,11 @@ namespace Gerakul.SqlQueue.InMemory
                         new SqlMetaData("Body", System.Data.SqlDbType.VarBinary, 8000),
                     };
 
-        internal Writer(QueueClient queueClient, int cleanMinIntervalSeconds)
+        internal Writer(QueueClient queueClient, int cleanMinIntervalSeconds, int numberOfRetryWhenConflict)
         {
             this.QueueClient = queueClient;
             this.cleanMinIntervalSeconds = cleanMinIntervalSeconds;
+            this.numberOfRetryWhenConflict = numberOfRetryWhenConflict;
         }
 
         private void OnCleanException(CleanExceptionEventArgs e)
@@ -97,7 +99,8 @@ namespace Gerakul.SqlQueue.InMemory
                     var cmd = conn.CreateCommand();
                     cmd.CommandType = System.Data.CommandType.StoredProcedure;
                     cmd.CommandText = $"[{QueueClient.QueueName}].[Clean]";
-                    cmd.ExecuteNonQuery();
+
+                    RetryHelper.Retry(() => cmd.ExecuteNonQuery(), 10);
                 }
 
                 lastCleanup = DateTime.UtcNow;
@@ -124,10 +127,12 @@ namespace Gerakul.SqlQueue.InMemory
 
                 try
                 {
-                    writeCommand.Parameters[0].Value = data;
-                    writeCommand.ExecuteNonQuery();
-
-                    id = (long)writeCommand.Parameters[1].Value;
+                    id = RetryHelper.Retry(() =>
+                    {
+                        writeCommand.Parameters[0].Value = data;
+                        writeCommand.ExecuteNonQuery();
+                        return (long)writeCommand.Parameters[1].Value;
+                    }, numberOfRetryWhenConflict);
                 }
                 catch
                 {
@@ -153,25 +158,31 @@ namespace Gerakul.SqlQueue.InMemory
 
                 try
                 {
-                    //writeManyCommand.Parameters[0].Value = new MessDbDataReader(data); // not working in net46
-                    writeManyCommand.Parameters[0].Value = GetRecords(data);
-                    writeManyCommand.Parameters[1].Value = returnIDs;
+                    ids = RetryHelper.Retry(() =>
+                    {
+                        //writeManyCommand.Parameters[0].Value = new MessDbDataReader(data); // not working in net46
+                        writeManyCommand.Parameters[0].Value = GetRecords(data);
+                        writeManyCommand.Parameters[1].Value = returnIDs;
 
-                    if (returnIDs)
-                    {
-                        ids = new List<long>();
-                        using (var r = writeManyCommand.ExecuteReader())
+                        if (returnIDs)
                         {
-                            while (r.Read())
+                            var idlist = new List<long>();
+                            using (var r = writeManyCommand.ExecuteReader())
                             {
-                                ids.Add(r.GetInt64(0));
+                                while (r.Read())
+                                {
+                                    idlist.Add(r.GetInt64(0));
+                                }
                             }
+
+                            return idlist;
                         }
-                    }
-                    else
-                    {
-                        writeManyCommand.ExecuteNonQuery();
-                    }
+                        else
+                        {
+                            writeManyCommand.ExecuteNonQuery();
+                            return null;
+                        }
+                    }, numberOfRetryWhenConflict);
                 }
                 catch
                 {
