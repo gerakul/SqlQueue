@@ -1,8 +1,4 @@
 ﻿
-
-
-
-
 CREATE PROCEDURE [Queue_Schema_Name].[EnableSubscription] 
   @subscriptionID int
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
@@ -11,8 +7,8 @@ CREATE PROCEDURE [Queue_Schema_Name].[EnableSubscription]
   WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
 
 
-declare @MaxID1 int
-declare @MaxID2 int
+declare @MaxID1 bigint
+declare @MaxID2 bigint
 declare @IsFirstActive bit
 
 select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive

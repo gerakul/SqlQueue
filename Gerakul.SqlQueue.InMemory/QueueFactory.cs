@@ -9,7 +9,7 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public sealed class QueueFactory
     {
-        public const string Version = "1.4.2";
+        public const string Version = "1.5.1";
 
         private string connectionString { get; }
 
@@ -665,12 +665,12 @@ begin
 end
 
 declare @Num1 int
-declare @MinID1 int
-declare @MaxID1 int
+declare @MinID1 bigint
+declare @MaxID1 bigint
 declare @NeedClean1 bit
 declare @Num2 int
-declare @MinID2 int
-declare @MaxID2 int
+declare @MinID2 bigint
+declare @MaxID2 bigint
 declare @NeedClean2 bit
 declare @IsFirstActive bit
 
@@ -1237,8 +1237,8 @@ GO
   WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
 
 
-declare @MaxID1 int
-declare @MaxID2 int
+declare @MaxID1 bigint
+declare @MaxID2 bigint
 declare @IsFirstActive bit
 
 select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive
@@ -1280,8 +1280,8 @@ GO
   WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
 
 
-declare @MaxID1 int
-declare @MaxID2 int
+declare @MaxID1 bigint
+declare @MaxID2 bigint
 declare @IsFirstActive bit
 
 select top 1 @MaxID1 = MaxID1, @MaxID2 = MaxID2, @IsFirstActive = IsFirstActive

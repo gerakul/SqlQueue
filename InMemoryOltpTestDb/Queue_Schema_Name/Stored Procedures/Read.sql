@@ -49,12 +49,12 @@ begin
 end
 
 declare @Num1 int
-declare @MinID1 int
-declare @MaxID1 int
+declare @MinID1 bigint
+declare @MaxID1 bigint
 declare @NeedClean1 bit
 declare @Num2 int
-declare @MinID2 int
-declare @MaxID2 int
+declare @MinID2 bigint
+declare @MaxID2 bigint
 declare @NeedClean2 bit
 declare @IsFirstActive bit
 
