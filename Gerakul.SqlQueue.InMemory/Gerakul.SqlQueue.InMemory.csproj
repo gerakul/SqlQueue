@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard1.4;netstandard2.0;net46</TargetFrameworks>
-    <Version>1.5.1</Version>
+    <Version>1.5.2</Version>
     <Authors>gerakul</Authors>
 
     <Description>Client library for working with queue based on memory optimized tables in Sql Server database</Description>

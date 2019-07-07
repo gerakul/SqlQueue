@@ -9,7 +9,7 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public sealed class QueueFactory
     {
-        public const string Version = "1.5.1";
+        public const string Version = "1.5.2";
 
         private string connectionString { get; }
 
@@ -115,7 +115,7 @@ CREATE SCHEMA [{name}]
 
 GO
 
-" + GetObjectsCreationScript(name, schemaOnlyDurability) + GetProceduresCreationScript(name);
+" + GetObjectsCreationScript(name, schemaOnlyDurability) + GetProceduresCreationScript(name, false);
         }
 
         internal static string GetObjectsDeletionScript(string name)
@@ -231,20 +231,21 @@ WITH (MEMORY_OPTIMIZED = ON);
 GO
 
 CREATE TABLE [{name}].[State] (
-    [ID]            BIGINT        NOT NULL,
-    [Modified]      DATETIME2 (7) NOT NULL,
-	[LastWrite]     DATETIME2 (7) NOT NULL,
-    [MinID1]        BIGINT        NOT NULL,
-    [MaxID1]        BIGINT        NOT NULL,
-    [Num1]          INT           NOT NULL,
-    [NeedClean1]    BIT           NOT NULL,
-    [MinID2]        BIGINT        NOT NULL,
-    [MaxID2]        BIGINT        NOT NULL,
-    [Num2]          INT           NOT NULL,
-    [NeedClean2]    BIT           NOT NULL,
-    [IsFirstActive] BIT           NOT NULL,
-    [MinNum]        INT           NOT NULL,
-    [TresholdNum]   INT           NOT NULL,
+    [ID]                 BIGINT        NOT NULL,
+    [Modified]           DATETIME2 (7) NOT NULL,
+    [LastWrite]          DATETIME2 (7) NOT NULL,
+    [MinID1]             BIGINT        NOT NULL,
+    [MaxID1]             BIGINT        NOT NULL,
+    [Num1]               INT           NOT NULL,
+    [NeedClean1]         BIT           NOT NULL,
+    [MinID2]             BIGINT        NOT NULL,
+    [MaxID2]             BIGINT        NOT NULL,
+    [Num2]               INT           NOT NULL,
+    [NeedClean2]         BIT           NOT NULL,
+    [IsFirstActive]      BIT           NOT NULL,
+    [MinNum]             INT           NOT NULL,
+    [TresholdNum]        INT           NOT NULL,
+    [ForceCleanInAction] BIT           NOT NULL,
     PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
 )
 WITH (DURABILITY = SCHEMA_ONLY, MEMORY_OPTIMIZED = ON);
@@ -310,6 +311,9 @@ GO
         internal static string GetProceduresDeletionScript(string name)
         {
             return $@"
+IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'ForceClean' AND ROUTINE_SCHEMA = '{name}')
+    DROP PROCEDURE [{name}].[ForceClean]
+GO
 
 IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_NAME = 'CreateSubscription' AND ROUTINE_SCHEMA = '{name}')
     DROP PROCEDURE [{name}].[CreateSubscription]
@@ -381,7 +385,7 @@ GO
 ";
         }
 
-        internal static string GetProceduresCreationScript(string name)
+        internal static string GetProceduresCreationScript(string name, bool execClean)
         {
             return $@"
 
@@ -453,20 +457,158 @@ else if (@IsFirstActive = 0 and @Num2 >= @MinNum and @MaxID1 > 0)
 delete from [{name}].[State]
 
 insert into [{name}].[State] (ID, Modified, LastWrite, MinID1, MaxID1, Num1, NeedClean1, MinID2, MaxID2,
-    Num2, NeedClean2, IsFirstActive, MinNum, TresholdNum)
+    Num2, NeedClean2, IsFirstActive, MinNum, TresholdNum, ForceCleanInAction)
 values (1, @time, @LastWrite, @MinID1, @MaxID1, @Num1, @NeedClean1, @MinID2, @MaxID2,
-    @Num2, @NeedClean2, @IsFirstActive, @MinNum, @TresholdNum)
+    @Num2, @NeedClean2, @IsFirstActive, @MinNum, @TresholdNum, 0)
 
 END
 
 GO
 
-" + GetMainProceduresScript(name, false);
+" + GetMainProceduresScript(name, false, execClean);
         }
 
-        internal static string GetMainProceduresScript(string name, bool alter)
+        internal static string GetMainProceduresScript(string name, bool alter, bool execClean)
         {
             return $@"
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Clean]
+  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
+  AS 
+  BEGIN ATOMIC 
+  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
+
+declare @LastWrite datetime2(7)
+declare @IsFirstActive bit
+declare @MaxID1 bigint
+declare @NeedClean1 bit
+declare @MaxID2 bigint
+declare @NeedClean2 bit
+
+select top 1 @LastWrite = LastWrite, @IsFirstActive = IsFirstActive,
+	@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
+from [{name}].[State]
+
+if (@MaxID1 is null)
+begin
+    exec [{name}].[RestoreState]
+
+    select top 1 @LastWrite = LastWrite, @IsFirstActive = IsFirstActive,
+		@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
+    from [{name}].[State]
+end
+
+declare @maxID bigint
+
+if (@IsFirstActive = 1)
+	set @maxID = @MaxID1
+else 
+	set @maxID = @MaxID2
+
+delete from [{name}].[Subscription]
+where ActionOnLimitExceeding = 1 
+	and (@maxID - LastCompletedID) > MaxUncompletedMessages 
+
+update [{name}].[Subscription]
+set LockTime = null, LockToken = null, [Disabled] = 1
+where ActionOnLimitExceeding = 2 and [Disabled] = 0 
+	and (@maxID - LastCompletedID) > MaxUncompletedMessages 
+
+--- actions triggered by MaxIdleIntervalSeconds ---<<<
+declare @candidates [{name}].[SubscriptionCandidatesToAction];
+
+insert into @candidates (ID, NextToCompletedID, MaxIdleIntervalSeconds, ActionOnLimitExceeding)
+select ID, LastCompletedID + 1 as NextToCompletedID, MaxIdleIntervalSeconds, ActionOnLimitExceeding
+from [{name}].[Subscription]
+where (ActionOnLimitExceeding = 1 or (ActionOnLimitExceeding = 2 and [Disabled] = 0))
+	and datediff(second, LastCompletedTime, @LastWrite) > MaxIdleIntervalSeconds
+	and LastCompletedID < @maxID
+
+declare @candidatesExist bit = (select top 1 1 from @candidates);
+
+if (@candidatesExist = 1)
+begin
+	-- rarely executed code
+	declare @actionNeeded [{name}].[SubscriptionsToAction];
+
+	insert into @actionNeeded (ID, ActionOnLimitExceeding)
+	select C.ID, C.ActionOnLimitExceeding 
+	from @candidates C
+		join [{name}].[Messages1] M on C.NextToCompletedID = M.ID
+	where datediff(second, M.Created, @LastWrite) > C.MaxIdleIntervalSeconds
+
+	insert into @actionNeeded (ID, ActionOnLimitExceeding)
+	select C.ID, C.ActionOnLimitExceeding 
+	from @candidates C
+		join [{name}].[Messages2] M on C.NextToCompletedID = M.ID
+	where datediff(second, M.Created, @LastWrite) > C.MaxIdleIntervalSeconds
+
+	declare @i int = 1
+	declare @maxRowID int = SCOPE_IDENTITY()
+	declare @SubIDToAction int
+	declare @ActionToTake int
+
+	while (@i <= @maxRowID)
+	begin
+		select @SubIDToAction = ID, @ActionToTake = ActionOnLimitExceeding
+		from @actionNeeded
+		where RowID = @i
+
+		if (@ActionToTake = 1)
+			delete from [{name}].[Subscription] 
+			where ID = @SubIDToAction
+		else if (@ActionToTake = 2)
+			update [{name}].[Subscription]
+			set LockTime = null, LockToken = null, [Disabled] = 1
+			where ID = @SubIDToAction
+
+		set @i += 1
+	end
+
+end
+--->>>
+
+if (@NeedClean1 = 1)
+begin
+    declare @SubscriptionExists1 bit
+
+    select top 1 @SubscriptionExists1 = 1 
+    from [{name}].Subscription 
+    where [Disabled] = 0 and LastCompletedID < @MaxID1   
+    
+    if (@SubscriptionExists1 is null) 
+    begin
+        delete from [{name}].[Messages1] -- заменить на truncate в следующем релизе sql server
+
+        update [{name}].[State]
+        set Modified = sysutcdatetime(), MinID1 = 0, MaxID1 = 0, Num1 = 0, NeedClean1 = 0
+    end
+end
+
+if (@NeedClean2 = 1)
+begin
+    declare @SubscriptionExists2 bit
+
+    select top 1 @SubscriptionExists2 = 1 
+    from [{name}].Subscription 
+    where [Disabled] = 0 and LastCompletedID < @MaxID2  
+    
+    if (@SubscriptionExists2 is null) 
+    begin
+        delete from [{name}].[Messages2] -- заменить на truncate в следующем релизе sql server
+
+        update [{name}].[State]
+        set Modified = sysutcdatetime(), MinID2 = 0, MaxID2 = 0, Num2 = 0, NeedClean2 = 0
+    end
+end
+
+END
+
+GO
+
+{(execClean ? $"exec [{name}].[Clean]" : "")}
+
+GO
 
 {(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Unlock]
   @subscriptionID int,
@@ -799,141 +941,6 @@ END
 GO
 
 
-{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Clean]
-  WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
-  AS 
-  BEGIN ATOMIC 
-  WITH (TRANSACTION ISOLATION LEVEL = SNAPSHOT, LANGUAGE = N'us_english')
-
-declare @LastWrite datetime2(7)
-declare @IsFirstActive bit
-declare @MaxID1 bigint
-declare @NeedClean1 bit
-declare @MaxID2 bigint
-declare @NeedClean2 bit
-
-select top 1 @LastWrite = LastWrite, @IsFirstActive = IsFirstActive,
-	@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
-from [{name}].[State]
-
-if (@MaxID1 is null)
-begin
-    exec [{name}].[RestoreState]
-
-    select top 1 @LastWrite = LastWrite, @IsFirstActive = IsFirstActive,
-		@MaxID1 = MaxID1, @NeedClean1 = NeedClean1, @MaxID2 = MaxID2, @NeedClean2 = NeedClean2
-    from [{name}].[State]
-end
-
-declare @maxID bigint
-
-if (@IsFirstActive = 1)
-	set @maxID = @MaxID1
-else 
-	set @maxID = @MaxID2
-
-delete from [{name}].[Subscription]
-where ActionOnLimitExceeding = 1 
-	and (@maxID - LastCompletedID) > MaxUncompletedMessages 
-
-update [{name}].[Subscription]
-set LockTime = null, LockToken = null, [Disabled] = 1
-where ActionOnLimitExceeding = 2 and [Disabled] = 0 
-	and (@maxID - LastCompletedID) > MaxUncompletedMessages 
-
---- actions triggered by MaxIdleIntervalSeconds ---<<<
-declare @candidates [{name}].[SubscriptionCandidatesToAction];
-
-insert into @candidates (ID, NextToCompletedID, MaxIdleIntervalSeconds, ActionOnLimitExceeding)
-select ID, LastCompletedID + 1 as NextToCompletedID, MaxIdleIntervalSeconds, ActionOnLimitExceeding
-from [{name}].[Subscription]
-where (ActionOnLimitExceeding = 1 or (ActionOnLimitExceeding = 2 and [Disabled] = 0))
-	and datediff(second, LastCompletedTime, @LastWrite) > MaxIdleIntervalSeconds
-	and LastCompletedID < @maxID
-
-declare @candidatesExist bit = (select top 1 1 from @candidates);
-
-if (@candidatesExist = 1)
-begin
-	-- rarely executed code
-	declare @actionNeeded [{name}].[SubscriptionsToAction];
-
-	insert into @actionNeeded (ID, ActionOnLimitExceeding)
-	select C.ID, C.ActionOnLimitExceeding 
-	from @candidates C
-		join [{name}].[Messages1] M on C.NextToCompletedID = M.ID
-	where datediff(second, M.Created, @LastWrite) > C.MaxIdleIntervalSeconds
-
-	insert into @actionNeeded (ID, ActionOnLimitExceeding)
-	select C.ID, C.ActionOnLimitExceeding 
-	from @candidates C
-		join [{name}].[Messages2] M on C.NextToCompletedID = M.ID
-	where datediff(second, M.Created, @LastWrite) > C.MaxIdleIntervalSeconds
-
-	declare @i int = 1
-	declare @maxRowID int = SCOPE_IDENTITY()
-	declare @SubIDToAction int
-	declare @ActionToTake int
-
-	while (@i <= @maxRowID)
-	begin
-		select @SubIDToAction = ID, @ActionToTake = ActionOnLimitExceeding
-		from @actionNeeded
-		where RowID = @i
-
-		if (@ActionToTake = 1)
-			delete from [{name}].[Subscription] 
-			where ID = @SubIDToAction
-		else if (@ActionToTake = 2)
-			update [{name}].[Subscription]
-			set LockTime = null, LockToken = null, [Disabled] = 1
-			where ID = @SubIDToAction
-
-		set @i += 1
-	end
-
-end
---->>>
-
-if (@NeedClean1 = 1)
-begin
-    declare @SubscriptionExists1 bit
-
-    select top 1 @SubscriptionExists1 = 1 
-    from [{name}].Subscription 
-    where [Disabled] = 0 and LastCompletedID < @MaxID1   
-    
-    if (@SubscriptionExists1 is null) 
-    begin
-        delete from [{name}].[Messages1] -- заменить на truncate в следующем релизе sql server
-
-        update [{name}].[State]
-        set Modified = sysutcdatetime(), MinID1 = 0, MaxID1 = 0, Num1 = 0, NeedClean1 = 0
-    end
-end
-
-if (@NeedClean2 = 1)
-begin
-    declare @SubscriptionExists2 bit
-
-    select top 1 @SubscriptionExists2 = 1 
-    from [{name}].Subscription 
-    where [Disabled] = 0 and LastCompletedID < @MaxID2  
-    
-    if (@SubscriptionExists2 is null) 
-    begin
-        delete from [{name}].[Messages2] -- заменить на truncate в следующем релизе sql server
-
-        update [{name}].[State]
-        set Modified = sysutcdatetime(), MinID2 = 0, MaxID2 = 0, Num2 = 0, NeedClean2 = 0
-    end
-end
-
-END
-
-GO
-
-
 {(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[Write] 
   @body varbinary(8000),
   @id bigint out
@@ -954,10 +961,14 @@ declare @NeedClean1 bit
 declare @NeedClean2 bit
 declare @MinNum int
 declare @TresholdNum int
+declare @ForceCleanInAction bit
+
+declare @descriptionString nvarchar(1024) = 'Queue: {name}'
+declare @errStr nvarchar(2048)
 
 select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
     @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-    @MinNum = MinNum, @TresholdNum = TresholdNum
+    @MinNum = MinNum, @TresholdNum = TresholdNum, @ForceCleanInAction = ForceCleanInAction
 from [{name}].[State]
 
 if (@MaxID1 is null)
@@ -966,8 +977,14 @@ begin
 
     select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
         @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-        @MinNum = MinNum, @TresholdNum = TresholdNum
+        @MinNum = MinNum, @TresholdNum = TresholdNum, @ForceCleanInAction = ForceCleanInAction
     from [{name}].[State]
+end
+
+if (@ForceCleanInAction = 1)
+begin
+	set @errStr = 'Force Clean in action. ' + @descriptionString;
+	throw 50005, @errStr, 1;
 end
 
 -- всегда оставляем последнее сообщение
@@ -1062,6 +1079,10 @@ declare @NeedClean1 bit
 declare @NeedClean2 bit
 declare @MinNum int
 declare @TresholdNum int
+declare @ForceCleanInAction bit
+
+declare @descriptionString nvarchar(1024) = 'Queue: {name}'
+declare @errStr nvarchar(2048)
 
 declare @lastID bigint
 
@@ -1072,7 +1093,7 @@ if (@cnt = 0)
 
 select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
     @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-    @MinNum = MinNum, @TresholdNum = TresholdNum
+    @MinNum = MinNum, @TresholdNum = TresholdNum, @ForceCleanInAction = ForceCleanInAction
 from [{name}].[State]
 
 if (@MaxID1 is null)
@@ -1081,8 +1102,14 @@ begin
 
     select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
         @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-        @MinNum = MinNum, @TresholdNum = TresholdNum
+        @MinNum = MinNum, @TresholdNum = TresholdNum, @ForceCleanInAction = ForceCleanInAction
     from [{name}].[State]
+end
+
+if (@ForceCleanInAction = 1)
+begin
+	set @errStr = 'Force Clean in action. ' + @descriptionString;
+	throw 50005, @errStr, 1;
 end
 
 -- всегда оставляем последнее сообщение
@@ -1415,6 +1442,27 @@ where [ID] = @subscriptionID
 
 END
 
+GO
+
+{(alter ? "ALTER" : "CREATE")} PROCEDURE [{name}].[ForceClean]
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+
+-- make sure the procedure has executed successfully
+-- if not then execute this procedure again
+-- otherwise Queue will not work
+
+update [{name}].[State]
+set [ForceCleanInAction] = 1
+
+exec [{name}].[Clean]
+
+update [{name}].[State]
+set [ForceCleanInAction] = 0
+
+END
 GO
 
 ";

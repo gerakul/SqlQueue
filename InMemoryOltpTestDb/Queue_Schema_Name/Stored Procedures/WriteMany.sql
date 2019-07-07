@@ -19,6 +19,10 @@ declare @NeedClean1 bit
 declare @NeedClean2 bit
 declare @MinNum int
 declare @TresholdNum int
+declare @ForceCleanInAction bit
+
+declare @descriptionString nvarchar(1024) = 'Queue: Queue_Schema_Name'
+declare @errStr nvarchar(2048)
 
 declare @lastID bigint
 
@@ -29,7 +33,7 @@ if (@cnt = 0)
 
 select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
     @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-    @MinNum = MinNum, @TresholdNum = TresholdNum
+    @MinNum = MinNum, @TresholdNum = TresholdNum, @ForceCleanInAction = ForceCleanInAction
 from [Queue_Schema_Name].[State]
 
 if (@MaxID1 is null)
@@ -38,8 +42,14 @@ begin
 
     select top 1 @IsFirstActive = IsFirstActive, @MaxID1 = MaxID1, @MaxID2 = MaxID2,
         @Num1 = Num1, @Num2 = Num2, @NeedClean1 = NeedClean1, @NeedClean2 = NeedClean2, 
-        @MinNum = MinNum, @TresholdNum = TresholdNum
+        @MinNum = MinNum, @TresholdNum = TresholdNum, @ForceCleanInAction = ForceCleanInAction
     from [Queue_Schema_Name].[State]
+end
+
+if (@ForceCleanInAction = 1)
+begin
+	set @errStr = 'Force Clean in action. ' + @descriptionString;
+	throw 50005, @errStr, 1;
 end
 
 -- всегда оставляем последнее сообщение

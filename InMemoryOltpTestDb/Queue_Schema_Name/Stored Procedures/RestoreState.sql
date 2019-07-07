@@ -1,4 +1,5 @@
 ﻿
+
 CREATE PROCEDURE [Queue_Schema_Name].[RestoreState] 
   WITH NATIVE_COMPILATION, SCHEMABINDING, EXECUTE AS OWNER
   AS 
@@ -67,8 +68,8 @@ else if (@IsFirstActive = 0 and @Num2 >= @MinNum and @MaxID1 > 0)
 delete from [Queue_Schema_Name].[State]
 
 insert into [Queue_Schema_Name].[State] (ID, Modified, LastWrite, MinID1, MaxID1, Num1, NeedClean1, MinID2, MaxID2,
-    Num2, NeedClean2, IsFirstActive, MinNum, TresholdNum)
+    Num2, NeedClean2, IsFirstActive, MinNum, TresholdNum, ForceCleanInAction)
 values (1, @time, @LastWrite, @MinID1, @MaxID1, @Num1, @NeedClean1, @MinID2, @MaxID2,
-    @Num2, @NeedClean2, @IsFirstActive, @MinNum, @TresholdNum)
+    @Num2, @NeedClean2, @IsFirstActive, @MinNum, @TresholdNum, 0)
 
 END

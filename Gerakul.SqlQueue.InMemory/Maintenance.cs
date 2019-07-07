@@ -7,6 +7,12 @@ namespace Gerakul.SqlQueue.InMemory
 {
     public class Maintenance
     {
+        private class Stage
+        {
+            public int ID;
+            public bool SchemaOnlyDurability;
+        }
+
         private string connectionString;
         private string queueName;
 
@@ -272,61 +278,43 @@ GO
         public static void UpdateFrom_1_3_0_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);
-            m.FullReset(false);
+            m.FullReset();
         }
 
         public static void UpdateFrom_1_4_0_To_Latest(string connectionString, string queueName)
         {
-            var createGlobalScript = $@"
-
-CREATE TABLE [{queueName}].[Global] (
-    [ID]      BIGINT        NOT NULL,
-    [Version] NVARCHAR (32) NOT NULL,
-    PRIMARY KEY NONCLUSTERED HASH ([ID]) WITH (BUCKET_COUNT = 1)
-)
-WITH (MEMORY_OPTIMIZED = ON);
-
-GO
-
-INSERT INTO [{queueName}].[Global] ([ID], [Version])
-VALUES (1, '{QueueFactory.Version}')
-
-GO
-";
-
-            using (var conn = new SqlConnection(connectionString))
-            {
-                conn.Open();
-
-                Helper.ExecuteBatches(conn, createGlobalScript);
-            }
-
             var m = new Maintenance(connectionString, queueName);
-            m.AlterMainProcedures();
+            m.FullReset();
         }
 
         public static void UpdateFrom_1_4_1_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);
-            m.AlterMainProcedures();
+            m.FullReset();
         }
 
         public static void UpdateFrom_1_4_2_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);
-            m.AlterMainProcedures();
+            m.FullReset();
         }
 
         public static void UpdateFrom_1_4_3_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);
-            m.AlterMainProcedures();
+            m.FullReset();
         }
 
         public static void UpdateFrom_1_5_0_To_Latest(string connectionString, string queueName)
         {
             var m = new Maintenance(connectionString, queueName);
-            m.AlterMainProcedures();
+            m.FullReset();
+        }
+
+        public static void UpdateFrom_1_5_1_To_Latest(string connectionString, string queueName)
+        {
+            var m = new Maintenance(connectionString, queueName);
+            m.FullReset();
         }
 
         public Maintenance(string connectionString, string queueName)
@@ -341,7 +329,7 @@ GO
             {
                 conn.Open();
 
-                Helper.ExecuteBatches(conn, QueueFactory.GetMainProceduresScript(queueName, true));
+                Helper.ExecuteBatches(conn, QueueFactory.GetMainProceduresScript(queueName, true, false));
             }
         }
 
@@ -361,22 +349,22 @@ GO
             {
                 conn.Open();
 
-                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName, false));
             }
         }
 
-        public void DropAndCreateAllProcedures()
+        public void DropAndCreateAllProcedures(bool execClean = false)
         {
             using (var conn = new SqlConnection(connectionString))
             {
                 conn.Open();
 
                 Helper.ExecuteBatches(conn, QueueFactory.GetProceduresDeletionScript(queueName));
-                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName, execClean));
             }
         }
 
-        public void FullReset(bool schemaOnlyDurability)
+        public void FullReset(bool? schemaOnlyDurability = null)
         {
             using (var conn = new SqlConnection(connectionString))
             {
@@ -384,10 +372,11 @@ GO
 
                 var stage = GetStage(conn);
 
-                if (stage != 2)
+                if (stage.ID != 2)
                 {
                     // stage1
                     Helper.ExecuteBatches(conn, GetMntStageCreationScript());
+                    stage = GetStage(conn);
                     Helper.ExecuteBatches(conn, QueueFactory.GetProceduresDeletionScript(queueName));
                     Helper.ExecuteBatches(conn, GetTmpTablesDeletionScript());
                     Helper.ExecuteBatches(conn, GetTmpTablesCreationScript());
@@ -397,15 +386,39 @@ GO
 
                 // stage2
                 Helper.ExecuteBatches(conn, QueueFactory.GetObjectsDeletionScript(queueName));
-                Helper.ExecuteBatches(conn, QueueFactory.GetObjectsCreationScript(queueName, schemaOnlyDurability));
+                Helper.ExecuteBatches(conn, QueueFactory.GetObjectsCreationScript(queueName, schemaOnlyDurability ?? stage.SchemaOnlyDurability));
                 Helper.ExecuteBatches(conn, GetDataCopyFromTmpScript());
                 Helper.ExecuteBatches(conn, GetUpdateStageScript(3));
 
                 // stage3
                 Helper.ExecuteBatches(conn, GetTmpTablesDeletionScript());
                 InsertGlobal(conn);
-                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName));
+                Helper.ExecuteBatches(conn, QueueFactory.GetProceduresCreationScript(queueName, true));
                 Helper.ExecuteBatches(conn, GetMntStageDeletionScript());
+            }
+        }
+
+        private bool DetermineSchemaOnlyDurability(SqlConnection conn)
+        {
+            var script = $@"
+select [durability] 
+from [sys].[tables] t
+	join [sys].[schemas] s on t.[schema_id] = s.[schema_id]
+		and s.[name] = '{queueName}'
+where t.[name] = 'Messages0'
+";
+
+            SqlCommand cmd = new SqlCommand(script, conn);
+            using (var r = cmd.ExecuteReader())
+            {
+                if (r.Read())
+                {
+                    return r.GetByte(0) == 1;
+                }
+                else
+                {
+                    return false;
+                }
             }
         }
 
@@ -432,13 +445,13 @@ WHERE ID = 1
             cmd.ExecuteNonQuery();
         }
 
-        private int GetStage(SqlConnection conn)
+        private Stage GetStage(SqlConnection conn)
         {
             var script = $@"
 IF EXISTS (SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'MntStage' AND TABLE_SCHEMA = '{queueName}')
-    select ID from  [{queueName}].[MntStage];
+    select ID, SchemaOnlyDurability from  [{queueName}].[MntStage];
 ELSE
-    select 0;
+    select 0, cast(0 as bit);
 ";
 
             SqlCommand cmd = new SqlCommand(script, conn);
@@ -446,7 +459,11 @@ ELSE
             using (var r = cmd.ExecuteReader())
             {
                 r.Read();
-                return r.GetInt32(0);
+                return new Stage
+                {
+                    ID = r.GetInt32(0),
+                    SchemaOnlyDurability = r.GetBoolean(1)
+                };
             }
         }
 
@@ -470,6 +487,7 @@ GO
 
 CREATE TABLE [{queueName}].[MntStage](
 	[ID] [int] NOT NULL,
+	[SchemaOnlyDurability] [bit] NOT NULL,
  CONSTRAINT [PK_MntStage] PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
@@ -478,8 +496,16 @@ CREATE TABLE [{queueName}].[MntStage](
 
 GO
 
-insert into [{queueName}].[MntStage] ([ID])
-values (1)
+declare @schemaOnlyDurability bit
+
+select @schemaOnlyDurability = cast(iif(t.durability = 1, 1, 0) as bit)
+from sys.tables t
+	join sys.schemas s on t.schema_id = s.schema_id
+		and s.name = '{queueName}'
+where t.name = 'Messages1'
+
+insert into [{queueName}].[MntStage] ([ID], [SchemaOnlyDurability])
+values (1, @schemaOnlyDurability)
 
 ";
         }
