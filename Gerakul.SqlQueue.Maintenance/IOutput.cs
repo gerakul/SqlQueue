@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace Gerakul.SqlQueue.Maintenance
 {
-    public static class Actions
+    public interface IOutput
     {
-        public const string Export = "export";
-        public const string Import = "import";
+        Task Write(string value);
+        Task WriteLine(string value);
     }
 }

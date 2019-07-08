@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Gerakul.SqlQueue.Maintenance
+namespace Gerakul.SqlQueue.Maintenance.Actions
 {
     public class ImportAction : IAction
     {
@@ -18,24 +18,21 @@ namespace Gerakul.SqlQueue.Maintenance
         private const string SubscriptionsOption = "subscriptions";
         private const string ReplaceOption = "replace";
 
+        private readonly IOutput output;
+
+        public ImportAction(IOutput output)
+        {
+            this.output = output;
+        }
+
         public Task Execute(string[] args)
         {
             var options = ActionHelper.ParseOptions(args, 1);
 
-            if (!options.TryGetValue(ConnectionStringOption.ToLowerInvariant(), out var connectionString))
-            {
-                Console.WriteLine($"{ConnectionStringOption} is not found");
-                return Task.CompletedTask;
-            }
-
-            if (!options.TryGetValue(FileOption.ToLowerInvariant(), out var file))
-            {
-                Console.WriteLine($"{FileOption} is not found");
-                return Task.CompletedTask;
-            }
-
-            bool includeSubscriptions = options.ContainsKey(SubscriptionsOption.ToLowerInvariant());
-            bool replace = options.ContainsKey(ReplaceOption.ToLowerInvariant());
+            var connectionString = options.GetString(ConnectionStringOption);
+            var file = options.GetString(FileOption);
+            bool includeSubscriptions = options.IsExists(SubscriptionsOption);
+            bool replace = options.IsExists(ReplaceOption);
 
             var json = File.ReadAllText(file);
             var queueConfList = JsonConvert.DeserializeObject<QueueConfigurationList>(json);
@@ -46,15 +43,15 @@ namespace Gerakul.SqlQueue.Maintenance
             {
                 var toCreate = false;
 
-                Console.WriteLine($"Started with queue {queueConf.Name}");
+                output.WriteLine($"Started with queue {queueConf.Name}");
 
                 if (queueFactory.IsQueueExsists(queueConf.Name))
                 {
                     if (replace)
                     {
-                        Console.Write($"Deleting queue {queueConf.Name}... ");
+                        output.Write($"Deleting queue {queueConf.Name}... ");
                         queueFactory.DeleteQueue(queueConf.Name);
-                        Console.WriteLine($"Deleted");
+                        output.WriteLine($"Deleted");
                         toCreate = true;
                     }
                 }
@@ -65,15 +62,15 @@ namespace Gerakul.SqlQueue.Maintenance
 
                 if (toCreate)
                 {
-                    Console.Write($"Creating queue {queueConf.Name}... ");
+                    output.Write($"Creating queue {queueConf.Name}... ");
                     var queueClient = queueFactory.CreateQueue(queueConf.Name, queueConf.MinNum, queueConf.TresholdNum);
-                    Console.WriteLine($"Created");
+                    output.WriteLine($"Created");
 
                     if (includeSubscriptions && queueConf.Subscriptions != null)
                     {
                         foreach (var subConf in queueConf.Subscriptions)
                         {
-                            Console.Write($"Creating subscription {subConf.Name}... ");
+                            output.Write($"Creating subscription {subConf.Name}... ");
 
                             queueClient.CreateSubscription(subConf.Name, new SubscriptionSettings()
                             {
@@ -87,12 +84,12 @@ namespace Gerakul.SqlQueue.Maintenance
                                 queueClient.DisableSubscription(subConf.Name);
                             }
 
-                            Console.WriteLine($"Created");
+                            output.WriteLine($"Created");
                         }
                     }
                 }
 
-                Console.WriteLine($"Finished with queue {queueConf.Name}");
+                output.WriteLine($"Finished with queue {queueConf.Name}");
             }
 
             return Task.CompletedTask;

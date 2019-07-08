@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Gerakul.SqlQueue.Maintenance.Actions;
+using Gerakul.SqlQueue.Maintenance.Exceptions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,9 +12,11 @@ namespace Gerakul.SqlQueue.Maintenance
     {
         static void Main(string[] args)
         {
+            var output = new ConsoleOutput();
+
             if (args == null || args.Length == 0)
             {
-                Console.WriteLine("Cannot find any arguments");
+                output.WriteLine("Cannot find any arguments");
                 return;
             }
 
@@ -21,22 +25,36 @@ namespace Gerakul.SqlQueue.Maintenance
 
             switch (actionName)
             {
-                case Actions.Export:
+                case ActionList.Export:
                     action = new ExportAction();
                     break;
-                case Actions.Import:
-                    action = new ImportAction();
+                case ActionList.Import:
+                    action = new ImportAction(output);
+                    break;
+                case ActionList.FullReset:
+                    action = new FullResetAction();
+                    break;
+                case ActionList.ForceClean:
+                    action = new ForceCleanAction();
                     break;
                 default:
-                    Console.WriteLine($"Action {actionName} is not supported");
+                    output.WriteLine($"Action {actionName} is not supported");
                     return;
             }
 
-            Console.WriteLine("Start action...");
+            output.WriteLine("Start action...");
 
-            action.Execute(args).Wait();
+            try
+            {
+                action.Execute(args).GetAwaiter().GetResult();
+            }
+            catch (OptionException ex)
+            {
+                output.WriteLine(ex.Message);
+                return;
+            }
 
-            Console.WriteLine("Complete");
+            output.WriteLine("Complete");
         }
     }
 }

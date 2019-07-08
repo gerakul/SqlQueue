@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Gerakul.SqlQueue.Maintenance
+namespace Gerakul.SqlQueue.Maintenance.Actions
 {
     public class ExportAction : IAction
     {
@@ -20,17 +20,9 @@ namespace Gerakul.SqlQueue.Maintenance
         {
             var options = ActionHelper.ParseOptions(args, 1);
 
-            if (!options.TryGetValue(ConnectionStringOption.ToLowerInvariant(), out var connectionString))
-            {
-                Console.WriteLine($"{ConnectionStringOption} is not found");
-            }
-
-            if (!options.TryGetValue(FileOption.ToLowerInvariant(), out var file))
-            {
-                Console.WriteLine($"{FileOption} is not found");
-            }
-
-            bool includeSubscriptions = options.ContainsKey(SubscriptionsOption.ToLowerInvariant());
+            var connectionString = options.GetString(ConnectionStringOption);
+            var file = options.GetString(FileOption);
+            bool includeSubscriptions = options.IsExists(SubscriptionsOption);
 
             var dbContext = SqlContextProvider.DefaultInstance.CreateContext(connectionString);
 

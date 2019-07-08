@@ -12,7 +12,7 @@ namespace Gerakul.SqlQueue.Maintenance
         private static readonly Regex regex = new Regex(@"^--(?<name>\w+)(=(?<value>.+))?$", 
             RegexOptions.IgnoreCase);
 
-        public static KeyValuePair<string, string> ParseOption(string option)
+        private static KeyValuePair<string, string> ParseOption(string option)
         {
             var match = regex.Match(option);
             var optionName = (match.Groups["name"].Value ?? "").ToLowerInvariant();
@@ -21,7 +21,7 @@ namespace Gerakul.SqlQueue.Maintenance
             return new KeyValuePair<string, string>(optionName, optionValue);
         }
 
-        public static Dictionary<string, string> ParseOptions(string[] args, int startIndex)
+        public static OptionHelper ParseOptions(string[] args, int startIndex)
         {
             Dictionary<string, string> options = new Dictionary<string, string>();
             for (int i = startIndex; i < args.Length; i++)
@@ -38,7 +38,7 @@ namespace Gerakul.SqlQueue.Maintenance
                 }
             }
 
-            return options;
+            return new OptionHelper(options);
         }
     }
 }

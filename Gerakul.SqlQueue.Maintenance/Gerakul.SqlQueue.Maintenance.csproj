@@ -74,10 +74,18 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ActionHelper.cs" />
-    <Compile Include="Actions.cs" />
-    <Compile Include="ExportAction.cs" />
+    <Compile Include="ConsoleOutput.cs" />
+    <Compile Include="Exceptions\OptionException.cs" />
+    <Compile Include="Exceptions\OptionHasIncorrectFormatException.cs" />
+    <Compile Include="Exceptions\OptionNotFoundException.cs" />
+    <Compile Include="IOutput.cs" />
+    <Compile Include="OptionHelper.cs" />
+    <Compile Include="ActionList.cs" />
+    <Compile Include="Actions\ExportAction.cs" />
+    <Compile Include="Actions\ForceCleanAction.cs" />
+    <Compile Include="Actions\FullResetAction.cs" />
     <Compile Include="IAction.cs" />
-    <Compile Include="ImportAction.cs" />
+    <Compile Include="Actions\ImportAction.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="QueueConfiguration.cs" />
