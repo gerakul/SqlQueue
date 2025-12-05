@@ -1,3 +1,5 @@
+__THIS REPOSITORY IS NOT BEING MAINTAINED ANYMORE__
+
 # SqlQueue
 Queue based on Sql Server Database
 
